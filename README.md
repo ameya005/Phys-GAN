@@ -1,15 +1,8 @@
-# pytorch-wgan-gp
-PyTorch implementation of [Improved Training of Wasserstein GANs, arxiv:1704.00028](https://arxiv.org/abs/1704.00028)
+# Phys-GANs
 
-![loss-function-with-penalty](./arts/loss-function.png)
+GANs built ot generate examples based on constraints based on physics laws.
 
-
-## Results
-
-Generated samples after training 1 epoch on LSUN Bedroom dataset
-
-![generated samples](./arts/generated_samples.jpg)
-
+WGAN Implementation based on the implementation by Ha Junsoo / [@kuc2477](https://github.com/kuc2477) / MIT License
 
 ## Installation
 ```
@@ -41,5 +34,3 @@ $ ./main.py --test --dataset=lsun
 - [caogang/wgan-gp](https://github.com/caogang/wgan-gp)
 
 
-## Author
-Ha Junsoo / [@kuc2477](https://github.com/kuc2477) / MIT License
