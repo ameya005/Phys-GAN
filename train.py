@@ -92,20 +92,20 @@ def train(model, dataset, collate_fn=None,
                 trained=batch_index*batch_size,
                 total=dataset_size,
                 progress=(100.*batch_index/dataset_batches),
-                g_loss=g_loss.data[0],
-                w_dist=-c_loss.data[0],
+                g_loss=g_loss.data.item(),
+                w_dist=-c_loss.data.item()
             ))
 
             # send losses to the visdom server.
             if iteration % loss_log_interval == 0:
                 visual.visualize_scalar(
-                    -c_loss.data[0],
+                    -c_loss.data.item(),
                     'estimated wasserstein distance between x and g',
                     iteration=iteration,
                     env=model.name
                 )
                 visual.visualize_scalar(
-                    g_loss.data[0],
+                    g_loss.item(),
                     'generator loss',
                     iteration=iteration,
                     env=model.name
