@@ -14,7 +14,7 @@ parser.add_argument(
     '--dataset', type=str,
     choices=list(TRAIN_DATASETS.keys()), default='cifar100'
 )
-
+parser.add_argument('--datapath', help='Path to the data files')
 parser.add_argument('--z-size', type=int, default=100)
 parser.add_argument('--g-channel-size', type=int, default=64)
 parser.add_argument('--c-channel-size', type=int, default=64)
@@ -31,8 +31,8 @@ parser.add_argument('--d-trains-per-g-train', type=int, default=5)
 
 parser.add_argument('--sample-dir', type=str, default='samples')
 parser.add_argument('--checkpoint-dir', type=str, default='checkpoints')
-parser.add_argument('--loss-log-interval', type=int, default=30)
-parser.add_argument('--image-log-interval', type=int, default=100)
+parser.add_argument('--loss-log-interval', type=int, default=10)
+parser.add_argument('--image-log-interval', type=int, default=10)
 parser.add_argument('--checkpoint-interval', type=int, default=1000)
 parser.add_argument('--resume', action='store_true')
 parser.add_argument('--no-gpus', action='store_false', dest='cuda')

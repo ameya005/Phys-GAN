@@ -9,12 +9,10 @@ import torchvision
 
 def get_data_loader(dataset, batch_size, cuda=False, collate_fn=None):
     collate_fn = collate_fn or default_collate
-    return DataLoader(
-        dataset, batch_size=batch_size,
+    dl =  DataLoader(dataset, batch_size=batch_size,
         shuffle=True, drop_last=True, collate_fn=collate_fn,
-        **({'num_workers': 0, 'pin_memory': True} if cuda else {})
-    )
-
+        **({'num_workers': 0, 'pin_memory': True} if cuda else {}))
+    return dl
 
 def save_checkpoint(model, model_dir, iteration):
     path = os.path.join(model_dir, model.name)
@@ -73,9 +71,9 @@ def xavier_initialize(model):
 
     for p in parameters:
         if p.dim() >= 2:
-            init.xavier_normal(p)
+            init.xavier_normal_(p)
         else:
-            init.constant(p, 0)
+            init.constant_(p, 0)
 
 
 def gaussian_intiailize(model, std=.01):
@@ -92,6 +90,6 @@ def gaussian_intiailize(model, std=.01):
 
     for p in parameters:
         if p.dim() >= 2:
-            init.normal(p, std=std)
+            init.normal_(p, std=std)
         else:
-            init.constant(p, 0)
+            init.constant_(p, 0)

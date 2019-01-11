@@ -8,7 +8,7 @@ import visual
 def train(model, dataset, collate_fn=None,
           lr=1e-04, weight_decay=1e-04, beta1=0.5, beta2=.999, lamda=10.,
           batch_size=32, sample_size=32, epochs=10,
-          d_trains_per_g_train=2,
+          d_trains_per_g_train=5,
           checkpoint_dir='checkpoints',
           checkpoint_interval=1000,
           image_log_interval=100,
@@ -23,6 +23,10 @@ def train(model, dataset, collate_fn=None,
         model.critic.parameters(), lr=lr, betas=(beta1, beta2),
         weight_decay=weight_decay
     )
+
+    """
+    Invariant optimizer
+    """
 
     # prepare the model and statistics.
     model.train()
@@ -45,17 +49,19 @@ def train(model, dataset, collate_fn=None,
                 x, _ = data
             except ValueError:
                 x = data
-
+            p1 = x.mean(dim=(2,3))
+            #print(p1.size())
             # where are we?
             dataset_size = len(data_loader.dataset)
             dataset_batches = len(data_loader)
-            iteration = (
+            iteration = ( 
                 (epoch-1)*(dataset_size // batch_size) +
                 batch_index + 1
             )
 
             # prepare the data.
             x = Variable(x).cuda() if cuda else Variable(x)
+            p1 = Variable(p1).cuda() if cuda else Variable(p1)
             d_trains = (
                 30 if (batch_index < 25 or batch_index % 500 == 0) else
                 d_trains_per_g_train
@@ -65,15 +71,15 @@ def train(model, dataset, collate_fn=None,
             for _ in range(d_trains):
                 critic_optimizer.zero_grad()
                 z = model.sample_noise(batch_size)
-                c_loss, g = model.c_loss(x, z, return_g=True)
+                c_loss, g = model.c_loss(x, z, p1, return_g=True)
                 c_loss_gp = c_loss + model.gradient_penalty(x, g, lamda=lamda)
                 c_loss_gp.backward()
                 critic_optimizer.step()
-
+            
             # run the generator and backpropagate the errors.
             generator_optimizer.zero_grad()
             z = model.sample_noise(batch_size)
-            g_loss = model.g_loss(z)
+            g_loss = model.g_loss(z, p1)
             g_loss.backward()
             generator_optimizer.step()
 
@@ -118,7 +124,11 @@ def train(model, dataset, collate_fn=None,
                     'generated samples',
                     env=model.name
                 )
-
+                visual.visualize_images(
+                    x.data,
+                    'original samples',
+                    env=model.name
+                )
             # save the model at checkpoints.
             if iteration % checkpoint_interval == 0:
                 # notify that we've reached to a new checkpoint.

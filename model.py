@@ -1,3 +1,6 @@
+"""
+Model classes
+"""
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -43,16 +46,20 @@ class Critic(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, z_size, image_size, image_channel_size, channel_size):
+    """
+    Generator must take a latent vector(z) and a vector/label (p1, p2)
+    """
+    def __init__(self, z_size, lv_size, image_size, image_channel_size, channel_size):
         # configurations
         super().__init__()
         self.z_size = z_size
+        self.lv_size = lv_size #currently will be 1 as p1 is a scalar
         self.image_size = image_size
         self.image_channel_size = image_channel_size
         self.channel_size = channel_size
 
         # layers
-        self.fc = nn.Linear(z_size, (image_size//8)**2 * channel_size*8)
+        self.fc = nn.Linear(self.z_size+self.lv_size, (image_size//8)**2 * channel_size*8)
         self.bn0 = nn.BatchNorm2d(channel_size*8)
         self.bn1 = nn.BatchNorm2d(channel_size*4)
         self.deconv1 = nn.ConvTranspose2d(
@@ -74,7 +81,9 @@ class Generator(nn.Module):
             kernel_size=3, stride=1, padding=1
         )
 
-    def forward(self, z):
+    def forward(self, z, p1):
+        #print(z.size())
+        z = torch.cat([z, p1], dim=1)
         g = F.relu(self.bn0(self.fc(z).view(
             z.size(0),
             self.channel_size*8,
@@ -86,7 +95,6 @@ class Generator(nn.Module):
         g = F.relu(self.bn3(self.deconv3(g)))
         g = self.deconv4(g)
         return F.sigmoid(g)
-
 
 class WGAN(nn.Module):
     def __init__(self, label, z_size,
@@ -108,7 +116,8 @@ class WGAN(nn.Module):
             channel_size=self.c_channel_size,
         )
         self.generator = Generator(
-            z_size=self.z_size,
+            z_size=self.z_size, #Adding p1 value
+            lv_size=1,
             image_size=self.image_size,
             image_channel_size=self.image_channel_size,
             channel_size=self.g_channel_size,
@@ -131,20 +140,36 @@ class WGAN(nn.Module):
             image_channel_size=self.image_channel_size,
         )
 
-    def c_loss(self, x, z, return_g=False):
-        g = self.generator(z)
+    def p1_fn(self, g):
+        #print(g.size())
+        return g.mean()
+
+    def c_loss(self, x, z, p1_x, return_g=False):
+        g = self.generator(z, p1_x)
+        #print(g.max(), x.max())
         c_x = self.critic(x).mean()
         c_g = self.critic(g).mean()
         l = -(c_x-c_g)
+        #print(c_x - c_g, p1_x - p1_g)
+        return (l, g) if return_g else l
+    
+    def p1_loss(self, g, p1_x, return_g = False):
+        l = torch.abs(p1_x - self.p1_fn(g)).mean()
+        return l
+        
+
+    def g_loss(self, z, p1_x, return_g=False):
+        g = self.generator(z, p1_x)
+        l = -self.critic(g).mean() #+ self.p1_loss(g, p1_x)
+        print(l.cpu().detach().numpy(), self.critic(g).mean().cpu().detach().numpy(), self.p1_loss(g, p1_x).cpu().detach().numpy())
         return (l, g) if return_g else l
 
-    def g_loss(self, z, return_g=False):
-        g = self.generator(z)
-        l = -self.critic(g).mean()
-        return (l, g) if return_g else l
+    def sample_p1(self, size):
+        p1 = Variable(torch.rand(size, 1))
+        return p1.cuda() if self._is_on_cuda() else p1
 
     def sample_image(self, size):
-        return self.generator(self.sample_noise(size))
+        return self.generator(self.sample_noise(size), self.sample_p1(size))
 
     def sample_noise(self, size):
         z = Variable(torch.randn(size, self.z_size)) * .1
