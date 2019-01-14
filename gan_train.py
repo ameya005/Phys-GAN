@@ -16,6 +16,7 @@ import pdb
 #import gpustat
 
 from models.wgan import *
+from models.checkers import *
 
 import torch
 import torchvision
@@ -46,9 +47,9 @@ VAL_CLASS = ['bedroom_val'] # IGNORE this if you are NOT training on lsun, or if
 if len(DATA_DIR) == 0:
     raise Exception('Please specify path to data directory in gan_64x64.py!')
 
-RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './models/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_outputs/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 64 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -58,12 +59,14 @@ BATCH_SIZE = 64# Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000 # How many iterations to train for
 LAMBDA = 10 # Gradient penalty lambda hyperparameter
 OUTPUT_DIM = 64*64*1 # Number of pixels in each image
-
+PJ_ITERS = 10
 # def showMemoryUsage(device=1):
 #     gpu_stats = gpustat.GPUStatCollection.new_query()
 #     item = gpu_stats.jsonify()["gpus"][device]
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
 
+def proj_loss(fake_data, real_data):
+    return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
 
 def weights_init(m):
     if isinstance(m, MyConvo2d): 
@@ -93,7 +96,7 @@ def load_data(path_to_folder, classes):
         dataset = MatSciDataset(path_to_folder)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder,transform=data_transform)
-    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, num_workers=5, drop_last=True, pin_memory=True)
+    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
     return dataset_loader
 
 def training_data_loader():
@@ -127,13 +130,16 @@ def calc_gradient_penalty(netD, real_data, fake_data):
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
     return gradient_penalty
 
-def generate_image(netG, noise=None):
+def generate_image(netG, noise=None, lv=None):
     if noise is None:
         noise = gen_rand_noise()
-
+    if lv is None:
+        lv = torch.randn(BATCH_SIZE, 1)
+        lv = lv.to(device)
     with torch.no_grad():
-    	noisev = noise 
-    samples = netG(noisev)
+        noisev = noise
+        lv_v = lv 
+    samples = netG(noisev, lv_v)
     samples = samples.view(BATCH_SIZE, 1, 64, 64)
     samples = samples * 0.5 + 0.5
     return samples
@@ -155,7 +161,7 @@ if RESTORE_MODE:
     aG = torch.load(OUTPUT_PATH + "generator.pt")
     aD = torch.load(OUTPUT_PATH + "discriminator.pt")
 else:
-    aG = GoodGenerator(64,64*64*1)
+    aG = GoodGenerator(64,64*64*1, ctrl_dim=1)
     aD = GoodDiscriminator(64)
     
     aG.apply(weights_init)
@@ -164,6 +170,7 @@ else:
 LR = 1e-4
 optimizer_g = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0,0.9))
 optimizer_d = torch.optim.Adam(aD.parameters(), lr=LR, betas=(0,0.9))
+optimizer_pj = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0, 0.9))
 one = torch.FloatTensor([1])
 mone = one * -1
 aG = aG.to(device)
@@ -185,12 +192,18 @@ def train():
             p.requires_grad_(False)  # freeze D
 
         gen_cost = None
+        real_data = next(dataiter)
+        if real_data is None:
+            dataiter = iter(datalader)
+            real_data = dataiter.next()
+        real_p1 = p1_fn(real_data)
+        real_p1 = real_p1.to(device)
         for i in range(GENER_ITERS):
             print("Generator iters: " + str(i))
             aG.zero_grad()
             noise = gen_rand_noise()
             noise.requires_grad_(True)
-            fake_data = aG(noise)
+            fake_data = aG(noise, real_p1)
             gen_cost = aD(fake_data)
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
@@ -199,6 +212,21 @@ def train():
         optimizer_g.step()
         end = timer()
         print(f'---train G elapsed time: {end - start}')
+        print(fake_data.size(), real_data.size())
+        #Projection steps
+        pj_cost = None
+        for i in range(PJ_ITERS):
+            print('Projection iters: {}'.format(i))
+            aG.zero_grad()
+            noise = gen_rand_noise()
+            noise.requires_grad=True
+            fake_data = aG(noise, real_p1) 
+            pj_cost = proj_loss(fake_data.view(-1,1,DIM, DIM), real_data.to(device))
+            pj_cost = pj_cost.mean()
+            pj_cost.backward()
+            optimizer_pj.step()
+
+
         #---------------------TRAIN D------------------------
         for p in aD.parameters():  # reset requires_grad
             p.requires_grad_(True)  # they are set to False below in training G
@@ -210,17 +238,20 @@ def train():
 
             # gen fake data and load real data
             noise = gen_rand_noise()
-            with torch.no_grad():
-                noisev = noise  # totally freeze G, training D
-            fake_data = aG(noisev).detach()
-            end = timer(); print(f'---gen G elapsed time: {end-start}')
-            start = timer()
             batch = next(dataiter, None)
             if batch is None:
                 dataiter = iter(dataloader)
                 batch = dataiter.next()
             #batch = batch[0] #batch[1] contains labels
             real_data = batch.to(device) #TODO: modify load_data for each loading
+            #real_p1.to(device)
+            with torch.no_grad():
+                noisev = noise  # totally freeze G, training D
+                real_p1 = p1_fn(real_data)
+                #real_p1_v = real_p1
+            end = timer(); print(f'---gen G elapsed time: {end-start}')
+            start = timer()
+            fake_data = aG(noisev, real_p1).detach()
             end = timer(); print(f'---load real imgs elapsed time: {end-start}')
             start = timer()
 
@@ -241,6 +272,7 @@ def train():
             disc_cost = disc_fake - disc_real + gradient_penalty
             disc_cost.backward()
             w_dist = disc_fake  - disc_real
+            
             optimizer_d.step()
             #------------------VISUALIZATION----------
             if i == CRITIC_ITERS-1:
@@ -248,6 +280,7 @@ def train():
                 #writer.add_scalar('data/disc_fake', disc_fake, iteration)
                 #writer.add_scalar('data/disc_real', disc_real, iteration)
                 writer.add_scalar('data/gradient_pen', gradient_penalty, iteration)
+                writer.add_scalar('data/p1_cost', pj_cost.cpu().detach(), iteration)
                 #writer.add_scalar('data/d_conv_weight_mean', [i for i in aD.children()][0].conv.weight.data.clone().mean(), iteration)
                 #writer.add_scalar('data/d_linear_weight_mean', [i for i in aD.children()][-1].weight.data.clone().mean(), iteration)
                 #writer.add_scalar('data/fake_data_mean', fake_data.mean())
@@ -272,18 +305,18 @@ def train():
         lib.plot.plot(OUTPUT_PATH + 'train_disc_cost', disc_cost.cpu().data.numpy())
         lib.plot.plot(OUTPUT_PATH + 'train_gen_cost', gen_cost.cpu().data.numpy())
         lib.plot.plot(OUTPUT_PATH + 'wasserstein_distance', w_dist.cpu().data.numpy())
-        if iteration % 10 == 0:
-            fake_2 = fake_data.cpu().detach().clone()
+        if iteration % 50 == 0:
+            fake_2 = fake_data.view(BATCH_SIZE, 1, DIM, DIM).cpu().detach().clone()
             fake_2 = torchvision.utils.make_grid(fake_2, nrow=8, padding=2)
             writer.add_image('G/images', fake_2, iteration)
-        if iteration % 200 == 199:
+        if iteration % 50 == 0:
             val_loader = val_data_loader() 
             dev_disc_costs = []
             for _, images in enumerate(val_loader):
                 imgs = torch.Tensor(images[0])
-               	imgs = imgs.to(device)
+                imgs = imgs.to(device)
                 with torch.no_grad():
-            	    imgs_v = imgs
+                    imgs_v = imgs
 
                 D = aD(imgs_v)
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
@@ -294,7 +327,7 @@ def train():
             torchvision.utils.save_image(gen_images, OUTPUT_PATH + 'samples_{}.png'.format(iteration), nrow=8, padding=2)
             grid_images = torchvision.utils.make_grid(gen_images, nrow=8, padding=2)
             writer.add_image('images', grid_images, iteration)
-	#----------------------Save model----------------------
+    #----------------------Save model----------------------
             torch.save(aG, OUTPUT_PATH + "generator.pt")
             torch.save(aD, OUTPUT_PATH + "discriminator.pt")
         lib.plot.tick()

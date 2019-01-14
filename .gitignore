@@ -1,6 +1,6 @@
 physgans
 
-i# Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -118,3 +118,19 @@ classification_models
 
 #Datasets
 datasets
+
+#images
+*.jpg
+*.png
+
+#Model files
+*.pt
+
+#virtualenv file
+physgan/
+
+#Runs
+runs/
+
+#pkl
+*.pkl
