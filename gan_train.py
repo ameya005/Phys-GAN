@@ -96,7 +96,7 @@ def load_data(path_to_folder, classes):
         dataset = MatSciDataset(path_to_folder)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder,transform=data_transform)
-    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, drop_last=True, pin_memory=True)
     return dataset_loader
 
 def training_data_loader():
