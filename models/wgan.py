@@ -1,6 +1,8 @@
 from torch import nn
 from torch.autograd import grad
 import torch
+
+
 DIM=64
 OUTPUT_DIM=64*64*1
 
@@ -162,12 +164,15 @@ class FCGenerator(nn.Module):
         return output
 
 class GoodGenerator(nn.Module):
-    def __init__(self, dim=DIM,output_dim=OUTPUT_DIM):
+    def __init__(self, dim=DIM,output_dim=OUTPUT_DIM, ctrl_dim=0):
         super(GoodGenerator, self).__init__()
 
         self.dim = dim
+        
+        #Adding latent vectors for control knobs
+        self.ctrl_dim = ctrl_dim
 
-        self.ln1 = nn.Linear(128, 4*4*8*self.dim)
+        self.ln1 = nn.Linear(128+self.ctrl_dim, 4*4*8*self.dim)
         self.rb1 = ResidualBlock(8*self.dim, 8*self.dim, 3, resample = 'up')
         self.rb2 = ResidualBlock(8*self.dim, 4*self.dim, 3, resample = 'up')
         self.rb3 = ResidualBlock(4*self.dim, 2*self.dim, 3, resample = 'up')
@@ -178,7 +183,8 @@ class GoodGenerator(nn.Module):
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
 
-    def forward(self, input):
+    def forward(self, input, lv):
+        input = torch.cat([input, lv], dim=1)
         output = self.ln1(input.contiguous())
         output = output.view(-1, 8*self.dim, 4, 4)
         output = self.rb1(output)
