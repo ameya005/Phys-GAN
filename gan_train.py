@@ -66,7 +66,7 @@ PJ_ITERS = 10
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
 
 def proj_loss(fake_data, real_data):
-    return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
+    return torch.abs(p1_fn((fake_data+1.0)/2.0) - p1_fn(real_data))
 
 def weights_init(m):
     if isinstance(m, MyConvo2d): 
@@ -141,7 +141,8 @@ def generate_image(netG, noise=None, lv=None):
         lv_v = lv 
     samples = netG(noisev, lv_v)
     samples = samples.view(BATCH_SIZE, 1, 64, 64)
-    samples = samples * 0.5 + 0.5
+    samples = (samples + 1.0)/2.0
+    # samples = samples * 0.5 + 0.5
     return samples
 
 def gen_rand_noise():
@@ -307,6 +308,7 @@ def train():
         lib.plot.plot(OUTPUT_PATH + 'wasserstein_distance', w_dist.cpu().data.numpy())
         if iteration % 50 == 0:
             fake_2 = fake_data.view(BATCH_SIZE, 1, DIM, DIM).cpu().detach().clone()
+            fake_2 = (fake_2 + 1.0)/2.0
             fake_2 = torchvision.utils.make_grid(fake_2, nrow=8, padding=2)
             writer.add_image('G/images', fake_2, iteration)
         if iteration % 50 == 0:
