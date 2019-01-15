@@ -47,7 +47,7 @@ VAL_CLASS = ['bedroom_val'] # IGNORE this if you are NOT training on lsun, or if
 if len(DATA_DIR) == 0:
     raise Exception('Please specify path to data directory in gan_64x64.py!')
 
-RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
 OUTPUT_PATH = './model_outputs/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
@@ -59,13 +59,16 @@ BATCH_SIZE = 64# Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000 # How many iterations to train for
 LAMBDA = 10 # Gradient penalty lambda hyperparameter
 OUTPUT_DIM = 64*64*1 # Number of pixels in each image
-PJ_ITERS = 10
+PJ_ITERS = 5
 # def showMemoryUsage(device=1):
 #     gpu_stats = gpustat.GPUStatCollection.new_query()
 #     item = gpu_stats.jsonify()["gpus"][device]
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
 
 def proj_loss(fake_data, real_data):
+    """
+    Fake data requires to be pushed from tanh range to [0, 1]
+    """
     return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
 
 def weights_init(m):
@@ -141,7 +144,7 @@ def generate_image(netG, noise=None, lv=None):
         lv_v = lv 
     samples = netG(noisev, lv_v)
     samples = samples.view(BATCH_SIZE, 1, 64, 64)
-    samples = samples * 0.5 + 0.5
+    #samples = samples * 0.5 + 0.5
     return samples
 
 def gen_rand_noise():
@@ -192,9 +195,10 @@ def train():
             p.requires_grad_(False)  # freeze D
 
         gen_cost = None
-        real_data = next(dataiter)
-        if real_data is None:
-            dataiter = iter(datalader)
+        try:
+            real_data = next(dataiter)
+        except StopIteration:
+            dataiter = iter(dataloader)
             real_data = dataiter.next()
         real_p1 = p1_fn(real_data)
         real_p1 = real_p1.to(device)
@@ -212,7 +216,7 @@ def train():
         optimizer_g.step()
         end = timer()
         print(f'---train G elapsed time: {end - start}')
-        print(fake_data.size(), real_data.size())
+        print(fake_data.min(), real_data.min())
         #Projection steps
         pj_cost = None
         for i in range(PJ_ITERS):
@@ -307,6 +311,7 @@ def train():
         lib.plot.plot(OUTPUT_PATH + 'wasserstein_distance', w_dist.cpu().data.numpy())
         if iteration % 50 == 0:
             fake_2 = fake_data.view(BATCH_SIZE, 1, DIM, DIM).cpu().detach().clone()
+            #fake_2 = (fake_2 + 1.0)/2.0
             fake_2 = torchvision.utils.make_grid(fake_2, nrow=8, padding=2)
             writer.add_image('G/images', fake_2, iteration)
         if iteration % 50 == 0:
