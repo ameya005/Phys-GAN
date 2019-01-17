@@ -40,10 +40,11 @@ def main():
         print('Generating sample no. {}'.format(i))
         noise = torch.randn((1, 128))
         p1 = torch.tensor(np.float32(np.random.random_sample(1))*(args.rmax - args.rmin) + args.rmin).unsqueeze(0)
+        #p1 = torch.tensor([0.436]).unsqueeze(0)
         #print(p1.size())
         g_img = gen_model(noise.to(device), p1.to(device))
         g_img = g_img.detach().cpu().numpy()
-        g_img = (g_img + 1.0)/2.0
+        #g_img = (g_img + 1.0)/2.0
         #print(g_img.max(), g_img.min())
         #g_img[g_img>0.5] = 1.0
         #g_img[g_img<=0.5] = 0.0

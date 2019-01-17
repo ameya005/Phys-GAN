@@ -224,7 +224,7 @@ def train():
             aG.zero_grad()
             noise = gen_rand_noise()
             noise.requires_grad=True
-            fake_data = aG(noise, real_p1) 
+            fake_data = aG(noise, real_p1)
             pj_cost = proj_loss(fake_data.view(-1,1,DIM, DIM), real_data.to(device))
             pj_cost = pj_cost.mean()
             pj_cost.backward()
