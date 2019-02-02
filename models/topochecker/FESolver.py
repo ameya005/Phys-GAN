@@ -11,16 +11,16 @@ from scipy.sparse.linalg import spsolve
 
 
 
-def ForwardTopo(Image:np.ndarray, load:list, fixity:list, E=1.0, nu=0.3):
+def ForwardTopo(Image:np.ndarray, load:list, fixity:list, E=1.0, nu=0.3, penal=3):
     
     def _node(nelx, nely, elx, ely):
         return (nely+1)*elx + ely
     
     def _nodes(nelx, nely, elx, ely):
-        n1 = _node(elx, ely)
-        n2 = _node(elx + 1, ely)
-        n3 = _node(elx + 1, ely + 1)
-        n4 = _node(elx, ely + 1)
+        n1 = _node(nelx, nely, elx, ely)
+        n2 = _node(nelx, nely, elx + 1, ely)
+        n3 = _node(nelx, nely, elx + 1, ely + 1)
+        n4 = _node(nelx, nely, elx, ely + 1)
         return n1, n2, n3, n4
     
     # element (local) stiffness matrix
@@ -53,13 +53,12 @@ def ForwardTopo(Image:np.ndarray, load:list, fixity:list, E=1.0, nu=0.3):
     def _edof(nelx, nely):
         elx = np.repeat(range(nelx), nely).reshape((nelx*nely, 1))  # x position of element
         ely = np.tile(range(nely), nelx).reshape((nelx*nely, 1))  # y position of element
-
-        n1, n2, n3, n4 = _nodes(elx, ely)
+        n1, n2, n3, n4 = _nodes(nelx, nely, elx, ely)
         edof = np.array([dim*n1, dim*n1+1, dim*n2, dim*n2+1,
                          dim*n3, dim*n3+1, dim*n4, dim*n4+1])
         return edof
 
-    def _compile_gk(Image, fixity, nelx, nely, dim, penal=3, kmin=1e-9)
+    def _compile_gk(Image, fixity, nelx, nely, dim, penal=3, kmin=1e-9):
         edof = _edof(nelx, nely)
         edof = edof.T[0]
 
@@ -71,9 +70,9 @@ def ForwardTopo(Image:np.ndarray, load:list, fixity:list, E=1.0, nu=0.3):
         value_list = ((np.tile(kmin, (nelx*nely, 1, 1)) + np.tile(ke()-kmin, (nelx*nely, 1, 1))*kd)).flatten()
 
         alldofs = [x for x in range(dim*(nely+1)*(nelx+1))]
-        n= _node(fixity[0], fixity[1])
+        n= _node(nelx, nely, fixity[0], fixity[1])
         fixdofs = [dim*n, dim*n + 1]
-        freedofs = list(set(alldofs - set(fixdofs)))
+        freedofs = list(set(alldofs) - set(fixdofs))
 
         dof = dim*(nelx+1)*(nely+1)
         k = coo_matrix((value_list, (y_list, x_list)), shape=(dof, dof)).tocsc()
@@ -92,22 +91,25 @@ def ForwardTopo(Image:np.ndarray, load:list, fixity:list, E=1.0, nu=0.3):
     if fixity[0] > nelx or fixity[1] > nely or fixity[0] < 0 or fixity[1] < 0:
         raise ValueError('fixity location must be within the image space')
 
-    K, freedof = _compile_gk(Image, fixity, nelx, nely, dim)
+    K, freedofs = _compile_gk(Image, fixity, nelx, nely, dim)
     force = np.zeros(dim*(nely+1)*(nelx+1))
+    n = _node(nelx, nely, load[0], load[1])
+    force[n] = load[2]
+    force[n+1] = load[3]
     f_free = force[freedofs]
     K_free = K[freedofs, :][:, freedofs]
 
     # solving the system f = Ku with scipy
-    u = np.zeros(load.dim*(nely+1)*(nelx+1))
-    u[freedofs] = spsolve(k_free, f_free)
+    u = np.zeros(dim*(nely+1)*(nelx+1))
+    u[freedofs] = spsolve(K_free, f_free)
 
     edof = _edof(nelx, nely)
-    ue = u[edof]  # list with the displacements of the nodes of that element
+    ue = u[edof].T  # list with the displacements of the nodes of that element
 
     # calculating the compliance in 3 steps
-    dot = np.dot(ke, ue.reshape((nelx*nely, 8, 1)))
-    ce = np.sum(ue.T*dot[:, :, 0], axis=0)  # element compliance
-    c = np.sum(ce * xe.T**penal)  # total compliance
+    dot = np.dot(ke(), ue.reshape((nelx*nely, 8, 1)))
+    ce = np.sum(ue.T*dot, axis=0).reshape(nelx,nely)  # element compliance
+    c = np.sum(ce * Image**penal)  # total compliance
     return ce, c
 
 def BackwardTopo(Image, Ce, penal=3):
@@ -127,3 +129,6 @@ if __name__ == '__main__':
 
     Ce, C = ForwardTopo(density_matrix, load, fixity)
     Dc = BackwardTopo(density_matrix, Ce)
+
+    import matplotlib.pyplot as plt
+    plt.imshow(Ce, cmap='jet')
