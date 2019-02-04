@@ -123,12 +123,17 @@ def BackwardTopo(Image, Ce, penal=3):
 
 
 if __name__ == '__main__':
-    density_matrix = np.ones((1600,400),dtype='float')
-    load = [1599, 399, -1, -1]
-    fixity =  [799, 199]
-
+    density_matrix = np.zeros((128,128), dtype=np.float32)+0.1
+    density_matrix[10:120, 10:120] = 1.0
+    load = [120, 120, -1, -1]
+    fixity =  [10, 10]
+    #print('In Main')
     Ce, C = ForwardTopo(density_matrix, load, fixity)
     Dc = BackwardTopo(density_matrix, Ce)
-
     import matplotlib.pyplot as plt
     plt.imshow(Ce, cmap='jet')
+    plt.figure()
+    plt.imshow(density_matrix, cmap='gray')
+    plt.figure()
+    plt.imshow(Dc, cmap='jet')
+    plt.show()
