@@ -24,11 +24,13 @@ def radial_profile(image, center, img_size):
     ind = np.argsort(rad.flat)
     rad_sorted = rad.flat[ind]
     image_sorted = image.flat[ind]
+    print(image_sorted)
     rad_round = rad_sorted.astype(int)
     deltar = rad_round[1:] - rad_round[:-1]
     nonzero_deltar = np.where(deltar > 0.0)[0]
     nind = nonzero_deltar[1:] - nonzero_deltar[:-1]
     yvalues = np.cumsum(image_sorted, dtype = np.float64)
+    print(yvalues)
     yvalues = yvalues[nonzero_deltar[1:]] - yvalues[nonzero_deltar[:-1]]
     radial_var = yvalues/nind
     radial_dis = rad_round[nonzero_deltar]/(min(image.shape))
@@ -78,6 +80,9 @@ def target_corr(images, img_size):
                     temy = temy - finImg.shape[1]
                 centrdImg[i, j] = finImg[temx, temy]
         center = [int(dimX/2), int(dimY/2)]
+        #return centrdImg
+        #plt.imshow(centrdImg)
+        #plt.show()
         radvar, raddis = radial_profile(centrdImg, center, img_size)
         radvars.append(radvar)
     targets = np.array(radvars)
