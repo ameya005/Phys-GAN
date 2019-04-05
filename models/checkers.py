@@ -46,7 +46,7 @@ def target_corr(x):
     nind = non_zero_deltar[1:] - non_zero_deltar[:-1]
     yvals = X_flat_sorted.cumsum(dim=1)
     radial_bin = yvals[:,non_zero_deltar[1:]] - yvals[:,non_zero_deltar[:-1]]
-    radial_var = radial_bin / torch.tensor(nind, dtype=torch.double)
+    radial_var = radial_bin/torch.FloatTensor(nind).cuda()
     radial_dis = rad_round[non_zero_deltar]/(dimX*dimY)
     return radial_var, radial_dis[:-1]
 

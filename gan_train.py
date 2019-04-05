@@ -47,9 +47,9 @@ VAL_CLASS = ['bedroom_val'] # IGNORE this if you are NOT training on lsun, or if
 if len(DATA_DIR) == 0:
     raise Exception('Please specify path to data directory in gan_64x64.py!')
 
-RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_outputs_p2_2/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 64 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -57,9 +57,11 @@ GENER_ITERS = 1
 N_GPUS = 1 # Number of GPUs
 BATCH_SIZE = 64# Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000 # How many iterations to train for
+#END_ITER = 1
 LAMBDA = 10 # Gradient penalty lambda hyperparameter
 OUTPUT_DIM = 64*64*1 # Number of pixels in each image
 PJ_ITERS = 5
+INV_PARAM = 'p2' 
 # def showMemoryUsage(device=1):
 #     gpu_stats = gpustat.GPUStatCollection.new_query()
 #     item = gpu_stats.jsonify()["gpus"][device]
@@ -69,7 +71,10 @@ def proj_loss(fake_data, real_data):
     """
     Fake data requires to be pushed from tanh range to [0, 1]
     """
-    return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
+    if INV_PARAM == 'p1':
+        return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
+    elif INV_PARAM == 'p2':
+        return torch.norm(p2_fn(fake_data) - p2_fn(real_data))
 
 def weights_init(m):
     if isinstance(m, MyConvo2d): 
@@ -164,7 +169,10 @@ if RESTORE_MODE:
     aG = torch.load(OUTPUT_PATH + "generator.pt")
     aD = torch.load(OUTPUT_PATH + "discriminator.pt")
 else:
-    aG = GoodGenerator(64,64*64*1, ctrl_dim=1)
+    if INV_PARAM == 'p1':
+        aG = GoodGenerator(64,64*64*1, ctrl_dim=1)
+    else:
+        aG = GoodGenerator(64,64*64*1, ctrl_dim=44)
     aD = GoodDiscriminator(64)
     
     aG.apply(weights_init)
@@ -200,7 +208,10 @@ def train():
         except StopIteration:
             dataiter = iter(dataloader)
             real_data = dataiter.next()
-        real_p1 = p1_fn(real_data)
+        if INV_PARAM == 'p1':
+            real_p1 = p1_fn(real_data)
+        elif INV_PARAM == 'p2':
+            real_p1 = p2_fn(real_data.to(device))
         real_p1 = real_p1.to(device)
         for i in range(GENER_ITERS):
             print("Generator iters: " + str(i))
@@ -251,7 +262,10 @@ def train():
             #real_p1.to(device)
             with torch.no_grad():
                 noisev = noise  # totally freeze G, training D
-                real_p1 = p1_fn(real_data)
+                if INV_PARAM == 'p1':
+                    real_p1 = p1_fn(real_data)
+                else:
+                    real_p1 = p2_fn(real_data)
                 #real_p1_v = real_p1
             end = timer(); print(f'---gen G elapsed time: {end-start}')
             start = timer()
@@ -316,19 +330,29 @@ def train():
             writer.add_image('G/images', fake_2, iteration)
         if iteration % 50 == 0:
             val_loader = val_data_loader() 
+            p2_vals = []
             dev_disc_costs = []
             for _, images in enumerate(val_loader):
                 imgs = torch.Tensor(images[0])
+                # print(imgs.size())
                 imgs = imgs.to(device)
                 with torch.no_grad():
                     imgs_v = imgs
-
+                # Sample random p2's for analysis
+                rn = np.random.rand()
+                if rn > 0.1 and len(p2_vals) < 64:
+                    p2_vals.append(p2_fn(imgs.unsqueeze(0)))
                 D = aD(imgs_v)
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))
-            lib.plot.flush()	
-            gen_images = generate_image(aG, fixed_noise)
+            lib.plot.flush()
+            print(p2_vals[0].size())
+            p2_vals = torch.stack(p2_vals, dim=0).squeeze(1).to(device)
+            print(p2_vals.size())
+            if p2_vals.size()[0] != BATCH_SIZE:
+                continue
+            gen_images = generate_image(aG, fixed_noise, p2_vals)
             torchvision.utils.save_image(gen_images, OUTPUT_PATH + 'samples_{}.png'.format(iteration), nrow=8, padding=2)
             grid_images = torchvision.utils.make_grid(gen_images, nrow=8, padding=2)
             writer.add_image('images', grid_images, iteration)
