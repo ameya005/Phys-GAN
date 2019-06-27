@@ -3,8 +3,8 @@ from torch.autograd import grad
 import torch
 
 
-DIM=64
-OUTPUT_DIM=64*64*1
+DIM=128
+OUTPUT_DIM=128*128*1
 
 class MyConvo2d(nn.Module):
     def __init__(self, input_dim, output_dim, kernel_size, he_init = True,  stride = 1, bias = True):
@@ -184,15 +184,16 @@ class GoodGenerator(nn.Module):
         #self.tanh = nn.Tanh()
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, input, lv):
-        input = torch.cat([input, lv], dim=1)
+    def forward(self, input, lv=None):
+        if lv is not None:
+            input = torch.cat([input, lv], dim=1)
         output = self.ln1(input.contiguous())
         output = output.view(-1, 8*self.dim, 4, 4)
         output = self.rb1(output)
         output = self.rb2(output)
         output = self.rb3(output)
         output = self.rb4(output)
-
+        print(output.size())
         output = self.bn(output)
         output = self.relu(output)
         output = self.conv1(output)
