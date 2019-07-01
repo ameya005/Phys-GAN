@@ -34,7 +34,7 @@ import torch.nn.init as init
 # lsun lmdb data set can be download via https://github.com/fyu/lsun
 # 64x64 ImageNet at http://image-net.org/small/download.php
 DATA_DIR = './datasets/poly_crystals/all_polycrystalline_data.mat' # Replace your image data path here
-VAL_DIR = './datasets/polycrystals/all_polycrystalline_data.mat' 
+VAL_DIR = './datasets/poly_crystals/all_polycrystalline_data.mat' 
 
 IMAGE_DATA_SET = 'polycrystal' 
 # change this to something else, e.g. 'imagenets' or 'raw' if your data is just a folder of raw images. 
@@ -50,13 +50,13 @@ if len(DATA_DIR) == 0:
 
 RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs_polycrystal/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_outputs_polycrystal_distmap/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 128 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
 GENER_ITERS = 1
 N_GPUS = 1 # Number of GPUs
-BATCH_SIZE = 64# Batch size. Must be a multiple of N_GPUS
+BATCH_SIZE = 16# Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000 # How many iterations to train for
 #END_ITER = 1
 LAMBDA = 10 # Gradient penalty lambda hyperparameter
@@ -144,14 +144,14 @@ def calc_gradient_penalty(netD, real_data, fake_data):
 def generate_image(netG, noise=None, lv=None):
     if noise is None:
         noise = gen_rand_noise()
-    if lv is None:
-        lv = torch.randn(BATCH_SIZE, 1)
-        lv = lv.to(device)
+    #if lv is None:
+    #    lv = torch.randn(BATCH_SIZE, 1)
+    #    lv = lv.to(device)
     with torch.no_grad():
         noisev = noise
-        lv_v = lv 
-    samples = netG(noisev, lv_v)
-    samples = samples.view(BATCH_SIZE, 1, 64, 64)
+    #    lv_v = lv 
+    samples = netG(noisev)
+    samples = samples.view(BATCH_SIZE, 1, 128, 128)
     #samples = samples * 0.5 + 0.5
     return samples
 
@@ -163,6 +163,7 @@ def gen_rand_noise():
 
 cuda_available = torch.cuda.is_available()
 device = torch.device("cuda" if cuda_available else "cpu")
+print(device)
 fixed_noise = gen_rand_noise() 
 
 if not os.path.exists(OUTPUT_PATH):
@@ -327,14 +328,14 @@ def train():
         lib.plot.plot(OUTPUT_PATH + 'train_disc_cost', disc_cost.cpu().data.numpy())
         lib.plot.plot(OUTPUT_PATH + 'train_gen_cost', gen_cost.cpu().data.numpy())
         lib.plot.plot(OUTPUT_PATH + 'wasserstein_distance', w_dist.cpu().data.numpy())
-        if iteration % 50 == 0:
+        if iteration % 10 == 0:
             fake_2 = fake_data.view(BATCH_SIZE, 1, DIM, DIM).cpu().detach().clone()
             #fake_2 = (fake_2 + 1.0)/2.0
             fake_2 = torchvision.utils.make_grid(fake_2, nrow=8, padding=2)
             writer.add_image('G/images', fake_2, iteration)
-        if iteration % 50 == 0:
+        if iteration % 10 == 0:
             val_loader = val_data_loader() 
-            p2_vals = []
+            #p2_vals = []
             dev_disc_costs = []
             for _, images in enumerate(val_loader):
                 imgs = torch.Tensor(images[0])
@@ -344,17 +345,17 @@ def train():
                     imgs_v = imgs
                 # Sample random p2's for analysis
                 rn = np.random.rand()
-                if rn > 0.1 and len(p2_vals) < 64:
-                    p2_vals.append(p2_fn(imgs.unsqueeze(0)))
+                #if rn > 0.1 and len(p2_vals) < 64:
+                #    p2_vals.append(p2_fn(imgs.unsqueeze(0)))
                 D = aD(imgs_v)
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))
             lib.plot.flush()
-            p2_vals = torch.stack(p2_vals, dim=0).squeeze(1).to(device)
-            if p2_vals.size()[0] != BATCH_SIZE:
-                continue
-            gen_images = generate_image(aG, fixed_noise, p2_vals)
+            #p2_vals = torch.stack(p2_vals, dim=0).squeeze(1).to(device)
+            #if p2_vals.size()[0] != BATCH_SIZE:
+            #    continue
+            gen_images = generate_image(aG, fixed_noise)
             torchvision.utils.save_image(gen_images, OUTPUT_PATH + 'samples_{}.png'.format(iteration), nrow=8, padding=2)
             grid_images = torchvision.utils.make_grid(gen_images, nrow=8, padding=2)
             writer.add_image('images', grid_images, iteration)

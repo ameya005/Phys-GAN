@@ -17,16 +17,16 @@ class PolyCrystalDataset(Dataset):
         self.data = h5py.File(data_path, mode='r')['all_morph']
         self.train = mode
         if self.train == 'train':
-            self.offset = 0
+            self.data = self.data[...,:28000]
         elif self.train == 'valid':
-            self.offset = 46200
+            self.data = self.data[...,28000:33000]
         elif self.train == 'test':
-            self.offset = 59400
+            self.data = self.data[...,33000:]
 
         self.transform = transform
 
     def __getitem__(self, index):
-        x = torch.FloatTensor(self.data[..., self.offset+index]).unsqueeze(0)
+        x = torch.FloatTensor(self.data[..., index]).unsqueeze(0)
         if self.transform is not None:
             x = self.transform(x)
         #print(x.min(), x.max())
