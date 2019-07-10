@@ -50,7 +50,7 @@ if len(DATA_DIR) == 0:
 
 RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs_polycrystal_distmap/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_outputs_polycrystals2/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 128 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -163,7 +163,6 @@ def gen_rand_noise():
 
 cuda_available = torch.cuda.is_available()
 device = torch.device("cuda" if cuda_available else "cpu")
-print(device)
 fixed_noise = gen_rand_noise() 
 
 if not os.path.exists(OUTPUT_PATH):
@@ -174,7 +173,7 @@ if RESTORE_MODE:
     aD = torch.load(OUTPUT_PATH + "discriminator.pt")
 else:
     #if INV_PARAM == 'p1':
-    aG = GoodGenerator(128,128*128*1, ctrl_dim=0)
+    aG = GoodGenerator(64,128*128*1, ctrl_dim=0)
     #else:
     #    aG = GoodGenerator(64,64*64*1, ctrl_dim=44)
     aD = GoodDiscriminator(64)
@@ -300,8 +299,8 @@ def train():
             #------------------VISUALIZATION----------
             if i == CRITIC_ITERS-1:
                 writer.add_scalar('data/disc_cost', disc_cost, iteration)
-                #writer.add_scalar('data/disc_fake', disc_fake, iteration)
-                #writer.add_scalar('data/disc_real', disc_real, iteration)
+                writer.add_scalar('data/disc_fake', disc_fake, iteration)
+                writer.add_scalar('data/disc_real', disc_real, iteration)
                 writer.add_scalar('data/gradient_pen', gradient_penalty, iteration)
 #                writer.add_scalar('data/p1_cost', pj_cost.cpu().detach(), iteration)
                 #writer.add_scalar('data/d_conv_weight_mean', [i for i in aD.children()][0].conv.weight.data.clone().mean(), iteration)
