@@ -56,6 +56,7 @@ def main():
         diffs.append(p1_n-p1_g)
         #plt.imshow(g_img.reshape((64,64)), cmap='gray')
         imsave(os.path.join(args.outdir, '{}_{}_{}.png'.format(i, int(p1_n*100), int(p1_g*100))), g_img.reshape((64,64)))  
+        np.save(os.path.join(args.outdir, '{}_{}_{}_output.npy'.format(i, int(p1_n*100), int(p1_g*100))), g_img.reshape(64,64))
     
     with open(os.path.join(args.outdir, 'stats.pkl'),'wb') as f:
         dict_obj = {'p1':p1_r, 'g_p1':p1_gl, 'diffs':diffs}

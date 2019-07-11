@@ -14,6 +14,7 @@ import pandas as pd
 from scipy.misc import imsave
 import h5py
 from models.checkers import *
+import numpy as np
 
 def build_parser():
     parser = ap.ArgumentParser()
@@ -53,18 +54,13 @@ def main():
         g_img = gen_model(noise.to(device), p2.to(device))
         g_img2 = g_img.detach().cpu().numpy()
         g_img = g_img.reshape((1,64,64)).unsqueeze(0)
-        #g_img = (g_img + 1.0)/2.0
-        #print(g_img.max(), g_img.min())
-        #g_img[g_img>0.5] = 1.0
-        #g_img[g_img<=0.5] = 0.0
-        #print(p1.detach().cpu().numpy(), g_img.mean())
         p2_n = p2.detach().cpu().numpy()
         p2_g =  p2_fn(g_img.cuda()).cpu().detach().numpy()
         p2_gl.append(p2_g)
         p2_r.append(p2_n)
         diffs.append(np.abs(p2_n-p2_g))
-        #plt.imshow(g_img.reshape((64,64)), cmap='gray')
         imsave(os.path.join(args.outdir, '{}_{}_{}.png'.format(i, int(p2_n[0,0]*100), int(p2_g[0,0]*100))), g_img2.reshape((64,64)))  
+        np.save(os.path.join(args.outdir, '{}_{}_{}_output.npy'.format(i, int(p2_n[0,0]*100), int(p2_g[0,0]*100))), g_img2.reshape(64,64))
     
     with open(os.path.join(args.outdir, 'stats.pkl'),'wb') as f:
         dict_obj = {'p1':p2_r, 'g_p1':p2_gl, 'diffs':diffs}
