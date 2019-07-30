@@ -27,15 +27,20 @@ from torchvision import transforms, datasets
 from torch.autograd import grad
 from timeit import default_timer as timer
 from matscidata import MatSciDataset
+from voronoidata import VoronoiDataset
 
 import torch.nn.init as init
 
+
 # lsun lmdb data set can be download via https://github.com/fyu/lsun
 # 64x64 ImageNet at http://image-net.org/small/download.php
-DATA_DIR = './datasets/matsci/morph_global_64_train_255.h5' # Replace your image data path here
-VAL_DIR = './datasets/matsci/morph_global_64_valid_255.h5' 
+# DATA_DIR = './datasets/matsci/morph_global_64_train_255.h5' # Replace your image data path here
+# VAL_DIR = './datasets/matsci/morph_global_64_valid_255.h5'
 
-IMAGE_DATA_SET = 'matsci' 
+DATA_DIR = './datasets/voronoi/orient_voronoi_noZero_train.h5'
+VAL_DIR = './datasets/voronoi/orient_voronoi_noZero_valid.h5'
+
+IMAGE_DATA_SET = 'voronoi'
 # change this to something else, e.g. 'imagenets' or 'raw' if your data is just a folder of raw images. 
 # Example: 
 # IMAGE_DATA_SET = 'raw'
@@ -47,9 +52,9 @@ VAL_CLASS = ['bedroom_val'] # IGNORE this if you are NOT training on lsun, or if
 if len(DATA_DIR) == 0:
     raise Exception('Please specify path to data directory in gan_64x64.py!')
 
-RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs_p2_2/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './voronoi_output/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 64 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -59,7 +64,7 @@ BATCH_SIZE = 64# Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000 # How many iterations to train for
 #END_ITER = 1
 LAMBDA = 10 # Gradient penalty lambda hyperparameter
-OUTPUT_DIM = 64*64*1 # Number of pixels in each image
+OUTPUT_DIM = 64*64*6 # Number of pixels in each image
 PJ_ITERS = 5
 INV_PARAM = 'p2' 
 # def showMemoryUsage(device=1):
@@ -102,6 +107,8 @@ def load_data(path_to_folder, classes):
         dataset =  datasets.LSUN(path_to_folder, classes=classes, transform=data_transform)
     elif IMAGE_DATA_SET == 'matsci':
         dataset = MatSciDataset(path_to_folder)
+    elif IMAGE_DATA_SET == 'voronoi':
+        dataset = VoronoiDataset(path_to_folder)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder,transform=data_transform)
     dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, drop_last=True, pin_memory=True)
@@ -192,6 +199,7 @@ mone = mone.to(device)
 writer = SummaryWriter()
 #Reference: https://github.com/caogang/wgan-gp/blob/master/gan_cifar10.py
 def train():
+    print("Loading the Training Data")
     dataloader = training_data_loader() 
     dataiter = iter(dataloader)
     for iteration in range(START_ITER, END_ITER):

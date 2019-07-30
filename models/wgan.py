@@ -2,9 +2,10 @@ from torch import nn
 from torch.autograd import grad
 import torch
 
+CATEGORY = 6
+DIM = 64
+OUTPUT_DIM = DIM*DIM*6
 
-DIM=128
-OUTPUT_DIM=128*128*1
 
 class MyConvo2d(nn.Module):
     def __init__(self, input_dim, output_dim, kernel_size, he_init = True,  stride = 1, bias = True):
@@ -69,7 +70,7 @@ class UpSampleConv(nn.Module):
 
     def forward(self, input):
         output = input
-        output = torch.cat((output, output, output, output), 1)
+        output = torch.cat((output, output, output, output), 1) # Making twice big
         output = self.depth_to_space(output)
         output = self.conv(output)
         return output
@@ -80,8 +81,8 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
 
         self.input_dim = input_dim
-        self.output_dim = output_dim
         self.kernel_size = kernel_size
+        self.output_dim = output_dim
         self.resample = resample
         self.bn1 = None
         self.bn2 = None
@@ -177,10 +178,13 @@ class GoodGenerator(nn.Module):
         self.rb2 = ResidualBlock(8*self.dim, 4*self.dim, 3, resample = 'up')
         self.rb3 = ResidualBlock(4*self.dim, 2*self.dim, 3, resample = 'up')
         self.rb4 = ResidualBlock(2*self.dim, 1*self.dim, 3, resample = 'up')
-        self.rb5 = ResidualBlock(1*self.dim, 1*self.dim, 3, resample='up')
+        # self.rb5 = ResidualBlock(1*self.dim, 1*self.dim, 3, resample='up')
+        self.softmax = nn.Softmax2d()
         self.bn  = nn.BatchNorm2d(self.dim)
 
-        self.conv1 = MyConvo2d(1*self.dim, 1, 3)
+        # self.conv1 = MyConvo2d(1*self.dim, 1, 3)
+        # self.conv1 = MyConvo2d(1*self.dim, CATEGORY, 3)
+        self.conv1 = MyConvo2d(1 * self.dim, CATEGORY, 3)
         self.relu = nn.ReLU()
         #self.tanh = nn.Tanh()
         #self.sigmoid = nn.Sigmoid()
@@ -194,12 +198,13 @@ class GoodGenerator(nn.Module):
         output = self.rb2(output)
         output = self.rb3(output)
         output = self.rb4(output)
-        output = self.rb5(output)
+        # output = self.rb5(output)
         output = self.bn(output)
         output = self.relu(output)
         output = self.conv1(output)
-        output = torch.nn.functional.sigmoid(output)
-        #output = torch.clamp(self.relu(output),0.0, 128*1.414)
+        output = self.softmax(output)
+        # output = torch.nn.functional.sigmoid(output)
+        # output = torch.clamp(self.relu(output),0.0, 128*1.414)
         output = output.view(-1, OUTPUT_DIM)
         return output
 
@@ -209,8 +214,9 @@ class GoodDiscriminator(nn.Module):
 
         self.dim = dim
 
-        self.conv1 = MyConvo2d(1, self.dim, 3, he_init = False)
-        self.rb1 = ResidualBlock(self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
+        self.conv1 = MyConvo2d(CATEGORY, self.dim, 3, he_init = False)
+        # self.conv1 = MyConvo2d(CATEGORY, CATEGORY*self.dim, 3, he_init=False)
+        self.rb1 = ResidualBlock(1*self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
         self.rb2 = ResidualBlock(2*self.dim, 4*self.dim, 3, resample = 'down', hw=int(DIM/2))
         self.rb3 = ResidualBlock(4*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/4))
         self.rb4 = ResidualBlock(8*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/8))
@@ -219,7 +225,7 @@ class GoodDiscriminator(nn.Module):
 
     def forward(self, input):
         output = input.contiguous()
-        output = output.view(-1, 1, DIM, DIM)
+        output = output.view(-1, CATEGORY, DIM, DIM)
         output = self.conv1(output)
         output = self.rb1(output)
         output = self.rb2(output)
