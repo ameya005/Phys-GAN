@@ -36,8 +36,8 @@ import torch.nn.init as init
 # lsun lmdb data set can be download via https://github.com/fyu/lsun
 # 64x64 ImageNet at http://image-net.org/small/download.php
 
-DATA_DIR = './datasets/voronoi/orient_voronoi_noZero_train.h5'
-VAL_DIR = './datasets/voronoi/orient_voronoi_noZero_valid.h5'
+DATA_DIR = './datasets/voronoi/train_60000_lhs.h5'
+VAL_DIR = './datasets/voronoi/valid_12000_lhs.h5'
 
 IMAGE_DATA_SET = 'voronoi'
 # change this to something else, e.g. 'imagenets' or 'raw' if your data is just a folder of raw images.
@@ -59,13 +59,13 @@ if len(DATA_DIR) == 0:
 RESTORE_MODE = False  # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0  # starting iteration
 # OUTPUT_PATH = './model_outputs_polycrystals2/'  # output path where result (.e.g drawing images, cost, chart) will be stored
-OUTPUT_PATH = './voronoi_output/'
+OUTPUT_PATH = './voronoi_output_INVNET2/'
 # MODE = 'wgan-gp'
 DIM = 64  # Model dimensionality
 CRITIC_ITERS = 5  # How many iterations to train the critic for
 GENER_ITERS = 1
 N_GPUS = 1  # Number of GPUs
-BATCH_SIZE = 64  # Batch size. Must be a multiple of N_GPUS
+BATCH_SIZE = 32  # Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000  # How many iterations to train for
 # END_ITER = 1
 LAMBDA = 10  # Gradient penalty lambda hyperparameter
@@ -78,8 +78,14 @@ INV_PARAM = 'p2'
 #     gpu_stats = gpustat.GPUStatCollection.new_query()
 #     item = gpu_stats.jsonify()["gpus"][device]
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
+def proj_loss(fake_data, label):
+    if INV_PARAM == 'p1':
+        pass
+    elif INV_PARAM == 'p2':
+        #TODO: Needs to be fixed
+        return torch.norm(grain_regularize_fn(fake_data, label))
 
-def proj_loss(fake_data, real_data):
+def proj_loss2(fake_data, real_data):
     """
     Fake data requires to be pushed from tanh range to [0, 1]
     """
@@ -164,13 +170,14 @@ def calc_gradient_penalty(netD, real_data, fake_data):
 def generate_image(netG, noise=None, lv=None):
     if noise is None:
         noise = gen_rand_noise()
-    # if lv is None:
-    #    lv = torch.randn(BATCH_SIZE, 1)
-    #    lv = lv.to(device)
+    if lv is None:
+       lv = torch.randn(BATCH_SIZE, 1)
+       # lv = (torch.rand(BATCH_SIZE, 1)-0.5)*80 + 60
+       lv = lv.to(device)
     with torch.no_grad():
         noisev = noise
-    #    lv_v = lv
-    samples = netG(noisev)
+        lv_v = lv
+    samples = netG(noisev, lv_v)
     # samples = samples.view(BATCH_SIZE, 1, DIM, DIM)
     samples = torch.argmax(samples.view(BATCH_SIZE, CATEGORY, DIM, DIM), dim=1).unsqueeze(1)
     samples = (samples * 255/CATEGORY)
@@ -198,7 +205,8 @@ if RESTORE_MODE:
     aD = torch.load(OUTPUT_PATH + "discriminator.pt")
 else:
     # if INV_PARAM == 'p1':
-    aG = GoodGenerator(64, DIM * DIM * 6, ctrl_dim=0)
+    # aG = GoodGenerator(64, DIM * DIM * 6, ctrl_dim=0)
+    aG = GoodGenerator(64, DIM * DIM * 6, ctrl_dim=1)
     # else:
     #    aG = GoodGenerator(64, 64*64*1, ctrl_dim=44)
     aD = GoodDiscriminator(64)
@@ -209,7 +217,7 @@ else:
 LR = 1e-4
 optimizer_g = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0, 0.9))
 optimizer_d = torch.optim.Adam(aD.parameters(), lr=LR, betas=(0, 0.9))
-# optimizer_pj = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0, 0.9))
+optimizer_pj = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0, 0.9))     # Projection Loss
 one = torch.FloatTensor([1])
 mone = one * -1
 aG = aG.to(device)
@@ -235,23 +243,24 @@ def train():
 
         gen_cost = None
         try:
-            real_data = next(dataiter)
+            real_data, real_label = next(dataiter)
         except StopIteration:
             dataiter = iter(dataloader)
-            real_data = dataiter.next()
+            real_data, real_label = dataiter.next()
         #  if INV_PARAM == 'p1':
         #     real_p1 = p1_fn(real_data)
         #  elif INV_PARAM == 'p2':
-        #      real_p1 = p2_fn(real_data.to(device))
-        #  real_p1 = real_p1.to(device)
-        real_p1 = None
+        #     real_p1 = p2_fn(real_data.to(device))
+        real_p1 = real_label.unsqueeze(1)        # This is the label for the dataset. Currently either 20 or 100.
+        real_p1 = real_p1.to(device)
+        # real_p1 = None
         for i in range(GENER_ITERS):
             print("Generator iters: " + str(i))
             aG.zero_grad()
             noise = gen_rand_noise()
             noise.requires_grad_(True)
-            fake_data = aG(noise)
-            # fake_data = aG(noise, real_p1)
+            # fake_data = aG(noise)
+            fake_data = aG(noise, real_p1)
             gen_cost = aD(fake_data)
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
@@ -262,17 +271,18 @@ def train():
         print(f'---train G elapsed time: {end - start}')
         print(fake_data.min(), real_data.min())
         # Projection steps
-        # pj_cost = None
-        # for i in range(PJ_ITERS):
-        #     print('Projection iters: {}'.format(i))
-        #     aG.zero_grad()
-        #     noise = gen_rand_noise()
-        #     noise.requires_grad=True
-        #     fake_data = aG(noise, real_p1)
-        #     pj_cost = proj_loss(fake_data.view(-1,1,DIM, DIM), real_data.to(device))
-        #     pj_cost = pj_cost.mean()
-        #     pj_cost.backward()
-        #     optimizer_pj.step()
+        pj_cost = None
+        for i in range(PJ_ITERS):
+            print('Projection iters: {}'.format(i))
+            aG.zero_grad()
+            noise = gen_rand_noise()
+            noise.requires_grad=True
+            fake_data = aG(noise, real_p1)
+            # pj_cost = proj_loss(fake_data.view(-1,1,DIM, DIM), real_data.to(device))
+            pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_p1)
+            pj_cost = pj_cost.mean()
+            pj_cost.backward()
+            optimizer_pj.step()
 
         # ---------------------TRAIN D------------------------
         for p in aD.parameters():  # reset requires_grad
@@ -285,12 +295,13 @@ def train():
 
             # gen fake data and load real data
             noise = gen_rand_noise()
-            batch = next(dataiter, None)
+            batch, batch_label = next(dataiter, None)
             if batch is None:
                 dataiter = iter(dataloader)
-                batch = dataiter.next()
+                batch, batch_label = dataiter.next()
             # batch = batch[0] #batch[1] contains labels
             real_data = batch.to(device=device, dtype=torch.float)  # TODO: modify load_data for each loading
+            # real_data = batch.to(device)
             # real_p1.to(device)
             with torch.no_grad():
                 noisev = noise  # totally freeze G, training D
@@ -299,6 +310,8 @@ def train():
                 # else:
                 #    real_p1 = p2_fn(real_data)
                 # real_p1_v = real_p1
+                real_p1 = batch_label.unsqueeze(1)  # This is the label for the dataset. Currently either 20 or 100.
+                real_p1 = real_p1.to(device)
             end = timer();
             print(f'---gen G elapsed time: {end-start}')
             start = timer()
@@ -374,7 +387,7 @@ def train():
             val_loader = val_data_loader()
             # p2_vals = []
             dev_disc_costs = []
-            for _, images in enumerate(val_loader):
+            for _, (images, images_label) in enumerate(val_loader):
                 # print(images[0])
                 # print(images[0].shape)
                 imgs = torch.FloatTensor(np.float32(images))

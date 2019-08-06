@@ -5,7 +5,12 @@ Checker functions
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+# from gan_train import BATCH_SIZE
 
+DIM = 64
+CATEGORY = 6
+PI = 3.1416
+BATCH_SIZE = 32
 def get_radial_indices(X):
     x, y = np.indices([X.size()[2], X.size()[3]])
     bs, ch, dimX, dimY = X.size()
@@ -47,9 +52,9 @@ def target_corr(x):
     yvals = X_flat_sorted.cumsum(dim=1)
     radial_bin = yvals[:,non_zero_deltar[1:]] - yvals[:,non_zero_deltar[:-1]]
     radial_var = radial_bin/torch.FloatTensor(nind).cuda()
+    # radial_var = radial_bin/torch.DoubleTensor(nind).cuda()
     radial_dis = rad_round[non_zero_deltar]/(dimX*dimY)
     return radial_var, radial_dis[:-1]
-
 
 def p2_fn(x, torch=True):
     if torch:
@@ -57,3 +62,32 @@ def p2_fn(x, torch=True):
         return p2_curve
     else:
         pass
+
+def normalized_p2(p2, epsilon=1e-8):
+    """
+
+    :param p2: p2-curve
+    :return: normalized p2-curve
+    """
+    return (p2 - p2[-1, :]) / (p2[0, :]-p2[-1, :]+epsilon)
+
+def grain_regularize_fn(x, label):
+    objective_tensor = torch.zeros(BATCH_SIZE, 44).cuda()
+    # with torch.no_grad():
+    for i in range(CATEGORY):
+        p2_curve = p2_fn(x[:, i].unsqueeze(1).float())  # (Batch, 1, 64, 64) to (Batch, 44)
+        normalized_p2_curve = normalized_p2(p2_curve)   # (Batch, 44)
+
+        temp1 = p2_curve[:, 0]
+        temp2 = label
+        # r_star = torch.sqrt(p2_curve[0, :] * (DIM*DIM/PI/n[i]))
+        r_star = torch.sqrt(p2_curve[:, 0] * (DIM*DIM/PI/label.squeeze(1)))       #
+
+        exp = torch.exp(-torch.arange(44).repeat(1, BATCH_SIZE).view(BATCH_SIZE, -1).float().cuda()/r_star.unsqueeze(1))
+
+        difference = exp - normalized_p2_curve
+        objective_tensor += difference
+
+    return objective_tensor
+
+
