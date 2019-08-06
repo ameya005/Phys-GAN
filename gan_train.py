@@ -29,6 +29,8 @@ from torch.autograd import grad
 from timeit import default_timer as timer
 from matscidata import MatSciDataset
 from polycrystaldata import PolyCrystalDataset
+
+from darpadataset import DarpaDataset
 from voronoidata import VoronoiDataset
 
 import torch.nn.init as init
@@ -109,8 +111,9 @@ def load_data(path_to_folder, train):
     data_transform = transforms.Compose([
         # transforms.Scale(64),
         # transforms.CenterCrop(64),
+        transforms.RandomCrop((64,64), pad_if_needed=True, padding_mode='reflect'),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
     ])
     # if IMAGE_DATA_SET == 'lsun':
     #    dataset =  datasets.LSUN(path_to_folder, classes=classes, transform=data_transform)
@@ -120,6 +123,8 @@ def load_data(path_to_folder, train):
         dataset = PolyCrystalDataset(path_to_folder, mode=train)
     elif IMAGE_DATA_SET == 'voronoi':
         dataset = VoronoiDataset(path_to_folder)
+    elif IMAGE_DATA_SET == 'darpa':
+        dataset = DarpaDataset(path_to_folder, train=train)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder, transform=data_transform)
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True,
