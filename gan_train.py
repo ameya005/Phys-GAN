@@ -171,8 +171,8 @@ def generate_image(netG, noise=None, lv=None):
     if noise is None:
         noise = gen_rand_noise()
     if lv is None:
-       lv = torch.randn(BATCH_SIZE, 1)
-       # lv = (torch.rand(BATCH_SIZE, 1)-0.5)*80 + 60
+       # lv = torch.randn(BATCH_SIZE, 1)
+       lv = (torch.rand(BATCH_SIZE, 1)-0.5)*80 + 60
        lv = lv.to(device)
     with torch.no_grad():
         noisev = noise
@@ -295,7 +295,8 @@ def train():
 
             # gen fake data and load real data
             noise = gen_rand_noise()
-            batch, batch_label = next(dataiter, None)
+            # batch, batch_label = next(dataiter, None)
+            batch, batch_label = next(dataiter)
             if batch is None:
                 dataiter = iter(dataloader)
                 batch, batch_label = dataiter.next()
@@ -408,8 +409,8 @@ def train():
             # if p2_vals.size()[0] != BATCH_SIZE:
             #    continue
             gen_images = generate_image(aG, fixed_noise)
-            torchvision.utils.save_image(gen_images, OUTPUT_PATH + 'samples_{}.png'.format(iteration), nrow=8,
-                                         padding=2)
+            # torchvision.utils.save_image(gen_images, OUTPUT_PATH + 'samples_{}.png'.format(iteration), nrow=8,
+            #                              padding=2)
             grid_images = torchvision.utils.make_grid(gen_images, nrow=8, padding=2)
             writer.add_image('images', grid_images, iteration)
             # ----------------------Save model----------------------

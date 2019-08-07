@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 DIM = 64
 CATEGORY = 6
 PI = 3.1416
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 def get_radial_indices(X):
     x, y = np.indices([X.size()[2], X.size()[3]])
     bs, ch, dimX, dimY = X.size()
@@ -81,7 +81,7 @@ def grain_regularize_fn(x, label):
         temp1 = p2_curve[:, 0]
         temp2 = label
         # r_star = torch.sqrt(p2_curve[0, :] * (DIM*DIM/PI/n[i]))
-        r_star = torch.sqrt(p2_curve[:, 0] * (DIM*DIM/PI/label.squeeze(1)))       #
+        r_star = torch.sqrt(p2_curve[:, 0] * (DIM*DIM/PI/(label/20).squeeze(1)))       #
 
         exp = torch.exp(-torch.arange(44).repeat(1, BATCH_SIZE).view(BATCH_SIZE, -1).float().cuda()/r_star.unsqueeze(1))
 
