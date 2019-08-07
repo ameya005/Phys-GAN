@@ -30,7 +30,7 @@ from timeit import default_timer as timer
 from matscidata import MatSciDataset
 from polycrystaldata import PolyCrystalDataset
 
-from darpadataset import DarpaDataset
+from darpadata import DarpaDataset
 from voronoidata import VoronoiDataset
 
 import torch.nn.init as init
@@ -38,10 +38,11 @@ import torch.nn.init as init
 # lsun lmdb data set can be download via https://github.com/fyu/lsun
 # 64x64 ImageNet at http://image-net.org/small/download.php
 
-DATA_DIR = './datasets/voronoi/orient_voronoi_noZero_train.h5'
-VAL_DIR = './datasets/voronoi/orient_voronoi_noZero_valid.h5'
+DATA_DIR = '../material_arrays_cropped.npy'
+VAL_DIR = '../material_arrays_cropped.npy'
+#VAL_DIR = './datasets/voronoi/orient_voronoi_noZero_valid.h5'
 
-IMAGE_DATA_SET = 'voronoi'
+IMAGE_DATA_SET = 'darpa'
 # change this to something else, e.g. 'imagenets' or 'raw' if your data is just a folder of raw images.
 # Example:
 # IMAGE_DATA_SET = 'raw'
@@ -61,13 +62,13 @@ if len(DATA_DIR) == 0:
 RESTORE_MODE = False  # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0  # starting iteration
 # OUTPUT_PATH = './model_outputs_polycrystals2/'  # output path where result (.e.g drawing images, cost, chart) will be stored
-OUTPUT_PATH = './voronoi_output/'
+OUTPUT_PATH = './darpa_output/'
 # MODE = 'wgan-gp'
 DIM = 64  # Model dimensionality
 CRITIC_ITERS = 5  # How many iterations to train the critic for
 GENER_ITERS = 1
 N_GPUS = 1  # Number of GPUs
-BATCH_SIZE = 64  # Batch size. Must be a multiple of N_GPUS
+BATCH_SIZE = 4 # Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000  # How many iterations to train for
 # END_ITER = 1
 LAMBDA = 10  # Gradient penalty lambda hyperparameter
@@ -111,9 +112,8 @@ def load_data(path_to_folder, train):
     data_transform = transforms.Compose([
         # transforms.Scale(64),
         # transforms.CenterCrop(64),
-        transforms.RandomCrop((64,64), pad_if_needed=True, padding_mode='reflect'),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
     ])
     # if IMAGE_DATA_SET == 'lsun':
     #    dataset =  datasets.LSUN(path_to_folder, classes=classes, transform=data_transform)
@@ -127,8 +127,7 @@ def load_data(path_to_folder, train):
         dataset = DarpaDataset(path_to_folder, train=train)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder, transform=data_transform)
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True,
-                                                 pin_memory=True)
+    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True, pin_memory=True)
     return dataset_loader
 
 
@@ -144,12 +143,12 @@ def calc_gradient_penalty(netD, real_data, fake_data):
     alpha = torch.rand(BATCH_SIZE, 1)
     # print('numel, ', real_data.numel())
     # print('real size', real_data.size() )
-    alpha = alpha.expand(BATCH_SIZE, int(real_data.nelement() / BATCH_SIZE)).contiguous()
-
-    alpha = alpha.view(BATCH_SIZE, CATEGORY, DIM, DIM)              # Changed the CATEGORY from 1
+    #alpha = alpha.expand(BATCH_SIZE, int(real_data.nelement() / BATCH_SIZE)).contiguous()
+    alpha = alpha.expand(BATCH_SIZE, CATEGORY*128*128).contiguous()
+    alpha = alpha.view(BATCH_SIZE, CATEGORY, 128, 128)              # Changed the CATEGORY from 1
     alpha = alpha.to(device)
 
-    fake_data = fake_data.view(BATCH_SIZE, CATEGORY, DIM, DIM)      # Changed the CATEGORY from 1
+    fake_data = fake_data.view(BATCH_SIZE, CATEGORY, 128, 128)      # Changed the CATEGORY from 1
     interpolates = alpha * real_data.detach() + ((1 - alpha) * fake_data.detach())
 
     interpolates = interpolates.to(device)
@@ -177,7 +176,7 @@ def generate_image(netG, noise=None, lv=None):
     #    lv_v = lv
     samples = netG(noisev)
     # samples = samples.view(BATCH_SIZE, 1, DIM, DIM)
-    samples = torch.argmax(samples.view(BATCH_SIZE, CATEGORY, DIM, DIM), dim=1).unsqueeze(1)
+    samples = torch.argmax(samples.view(BATCH_SIZE, CATEGORY, 128, 128), dim=1).unsqueeze(1)
     samples = (samples * 255/CATEGORY)
     samples = samples.int()
     # samples = samples * 0.5 + 0.5
@@ -368,7 +367,7 @@ def train():
         lib.plot.plot(OUTPUT_PATH + 'train_gen_cost', gen_cost.cpu().data.numpy())
         lib.plot.plot(OUTPUT_PATH + 'wasserstein_distance', w_dist.cpu().data.numpy())
         if iteration % 10 == 0:
-            fake_2 = torch.argmax(fake_data.view(BATCH_SIZE, CATEGORY, DIM, DIM), dim = 1).unsqueeze(1)
+            fake_2 = torch.argmax(fake_data.view(BATCH_SIZE, CATEGORY, 128, 128), dim = 1).unsqueeze(1)
             fake_2 = (fake_2 * 255/6)
             fake_2 = fake_2.int()
             fake_2 = fake_2.cpu().detach().clone()

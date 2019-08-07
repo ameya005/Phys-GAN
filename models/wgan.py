@@ -4,7 +4,7 @@ import torch
 
 CATEGORY = 6
 DIM = 64
-OUTPUT_DIM = DIM*DIM*6
+OUTPUT_DIM = 128*128*6
 
 
 class MyConvo2d(nn.Module):
@@ -178,6 +178,7 @@ class GoodGenerator(nn.Module):
         self.rb2 = ResidualBlock(8*self.dim, 4*self.dim, 3, resample = 'up')
         self.rb3 = ResidualBlock(4*self.dim, 2*self.dim, 3, resample = 'up')
         self.rb4 = ResidualBlock(2*self.dim, 1*self.dim, 3, resample = 'up')
+        self.rb5 = ResidualBlock(1*self.dim, 1*self.dim, 3, resample = 'up')
         # self.rb5 = ResidualBlock(1*self.dim, 1*self.dim, 3, resample='up')
         self.softmax = nn.Softmax2d()
         self.bn  = nn.BatchNorm2d(self.dim)
@@ -198,6 +199,7 @@ class GoodGenerator(nn.Module):
         output = self.rb2(output)
         output = self.rb3(output)
         output = self.rb4(output)
+        output = self.rb5(output)
         # output = self.rb5(output)
         output = self.bn(output)
         output = self.relu(output)
@@ -216,6 +218,7 @@ class GoodDiscriminator(nn.Module):
 
         self.conv1 = MyConvo2d(CATEGORY, self.dim, 3, he_init = False)
         # self.conv1 = MyConvo2d(CATEGORY, CATEGORY*self.dim, 3, he_init=False)
+        self.rb0 = ResidualBlock(1*self.dim, 1*self.dim, 3, resample = 'down', hw=2*DIM)
         self.rb1 = ResidualBlock(1*self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
         self.rb2 = ResidualBlock(2*self.dim, 4*self.dim, 3, resample = 'down', hw=int(DIM/2))
         self.rb3 = ResidualBlock(4*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/4))
@@ -225,8 +228,9 @@ class GoodDiscriminator(nn.Module):
 
     def forward(self, input):
         output = input.contiguous()
-        output = output.view(-1, CATEGORY, DIM, DIM)
+        output = output.view(-1, CATEGORY, 128, 128)
         output = self.conv1(output)
+        output = self.rb0(output)
         output = self.rb1(output)
         output = self.rb2(output)
         output = self.rb3(output)
