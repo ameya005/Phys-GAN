@@ -30,7 +30,7 @@ class VoronoiDataset(Dataset):
 
     def __getitem__(self, index):
         # x = torch.FloatTensor(self.data[index, ...])
-        x = self.data[index, ...].float()
+        x = self.data[index, ...].float()       # Making the data to have data type 'float'
         # y = self.label[index]
         if self.transform is not None:
             x = self.transform(x)

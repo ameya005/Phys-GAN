@@ -25,7 +25,7 @@ def get_radial_indices(X):
 def p1_fn(x, torch=True):
     #print(x.size())
     if torch:
-        return x.mean(dim=(2, 3)).unsqueeze(1)
+        return x.mean(dim=(2,3))
     else:
         return x.mean(axis=(1,2,3))
 

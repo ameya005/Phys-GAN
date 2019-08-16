@@ -78,6 +78,7 @@ INV_PARAM = 'p1'
 #     gpu_stats = gpustat.GPUStatCollection.new_query()
 #     item = gpu_stats.jsonify()["gpus"][device]
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
+
 # def proj_loss(fake_data, label):
 #     if INV_PARAM == 'p1':
 #         pass
@@ -90,6 +91,7 @@ def proj_loss(fake_data, real_data):
     Fake data requires to be pushed from tanh range to [0, 1]
     """
     if INV_PARAM == 'p1':
+        # return torch.abs(p1_fn(real_data))
         return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
     elif INV_PARAM == 'p2':
         return torch.norm(p2_fn(fake_data) - p2_fn(real_data))
@@ -172,7 +174,9 @@ def generate_image(netG, noise=None, lv=None):
         noise = gen_rand_noise()
     if lv is None:
        # lv = torch.randn(BATCH_SIZE, 1)
-       lv = (torch.rand(BATCH_SIZE, 1)-0.5)*80 + 60
+       lv = torch.rand(BATCH_SIZE, CATEGORY)
+       summ = torch.sum(lv, dim=1).unsqueeze(1)
+       lv = lv /summ
        lv = lv.to(device)
     with torch.no_grad():
         noisev = noise
@@ -206,7 +210,7 @@ if RESTORE_MODE:
 else:
     # if INV_PARAM == 'p1':
     # aG = GoodGenerator(64, DIM * DIM * 6, ctrl_dim=0)
-    aG = GoodGenerator(64, DIM * DIM * 6, ctrl_dim=1)
+    aG = GoodGenerator(64, DIM * DIM * 6, ctrl_dim=CATEGORY)
     # else:
     #    aG = GoodGenerator(64, 64*64*1, ctrl_dim=44)
     aD = GoodDiscriminator(64)
@@ -279,7 +283,7 @@ def train():
             noise.requires_grad=True
             fake_data = aG(noise, real_p1)
             # pj_cost = proj_loss(fake_data.view(-1,1,DIM, DIM), real_data.to(device))
-            pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_p1)
+            pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_data.to(device))
             pj_cost = pj_cost.mean()
             pj_cost.backward()
             optimizer_pj.step()
@@ -388,7 +392,7 @@ def train():
             val_loader = val_data_loader()
             # p2_vals = []
             dev_disc_costs = []
-            for _, (images, images_label) in enumerate(val_loader):
+            for _, images in enumerate(val_loader):
                 # print(images[0])
                 # print(images[0].shape)
                 imgs = torch.FloatTensor(np.float32(images))
