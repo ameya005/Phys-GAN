@@ -24,19 +24,19 @@ class VoronoiDataset(Dataset):
         self.data = torch.from_numpy(self.data)             # converting to tensor
         self.data = F.one_hot(self.data, num_classes=6)                    # one_hot
         self.data = self.data.transpose(1, 3)
-        self.label = torch.cat((100*torch.ones(len(self.data)//2), 20*torch.ones(len(self.data)//2)))
+        # self.label = torch.cat((100*torch.ones(len(self.data)//2), 20*torch.ones(len(self.data)//2)))
         # self.label = torch.cat((torch.ones(len(self.data) // 2), 0.2*torch.ones(len(self.data) // 2)))
         self.transform = transform
 
     def __getitem__(self, index):
         # x = torch.FloatTensor(self.data[index, ...])
-        x = self.data[index, ...]
-        y = self.label[index]
+        x = self.data[index, ...].float()
+        # y = self.label[index]
         if self.transform is not None:
             x = self.transform(x)
         # print(x.min(), x.max())
         # p1 = torch.FloatTensor(x.mean())
-        return x, y
+        return x
 
     def __len__(self):
         return self.data.shape[0]

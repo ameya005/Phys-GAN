@@ -36,8 +36,8 @@ import torch.nn.init as init
 # lsun lmdb data set can be download via https://github.com/fyu/lsun
 # 64x64 ImageNet at http://image-net.org/small/download.php
 
-DATA_DIR = './datasets/voronoi/train_60000_lhs.h5'
-VAL_DIR = './datasets/voronoi/valid_12000_lhs.h5'
+DATA_DIR = './datasets/voronoi/train_30000_lhs.h5'
+VAL_DIR = './datasets/voronoi/valid_6000_lhs.h5'
 
 IMAGE_DATA_SET = 'voronoi'
 # change this to something else, e.g. 'imagenets' or 'raw' if your data is just a folder of raw images.
@@ -59,7 +59,7 @@ if len(DATA_DIR) == 0:
 RESTORE_MODE = False  # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0  # starting iteration
 # OUTPUT_PATH = './model_outputs_polycrystals2/'  # output path where result (.e.g drawing images, cost, chart) will be stored
-OUTPUT_PATH = './voronoi_output_INVNET2/'
+OUTPUT_PATH = './output/Debugging/'
 # MODE = 'wgan-gp'
 DIM = 64  # Model dimensionality
 CRITIC_ITERS = 5  # How many iterations to train the critic for
@@ -71,21 +71,21 @@ END_ITER = 100000  # How many iterations to train for
 LAMBDA = 10  # Gradient penalty lambda hyperparameter
 OUTPUT_DIM = DIM * DIM * 6 # Number of pixels in each image
 PJ_ITERS = 5
-INV_PARAM = 'p2'
+INV_PARAM = 'p1'
 
 
 # def showMemoryUsage(device=1):
 #     gpu_stats = gpustat.GPUStatCollection.new_query()
 #     item = gpu_stats.jsonify()["gpus"][device]
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
-def proj_loss(fake_data, label):
-    if INV_PARAM == 'p1':
-        pass
-    elif INV_PARAM == 'p2':
-        #TODO: Needs to be fixed
-        return torch.norm(grain_regularize_fn(fake_data, label))
+# def proj_loss(fake_data, label):
+#     if INV_PARAM == 'p1':
+#         pass
+#     elif INV_PARAM == 'p2':
+#         #TODO: Needs to be fixed
+#         return torch.norm(grain_regularize_fn(fake_data, label))
 
-def proj_loss2(fake_data, real_data):
+def proj_loss(fake_data, real_data):
     """
     Fake data requires to be pushed from tanh range to [0, 1]
     """
@@ -243,15 +243,15 @@ def train():
 
         gen_cost = None
         try:
-            real_data, real_label = next(dataiter)
+            real_data = next(dataiter)
         except StopIteration:
             dataiter = iter(dataloader)
-            real_data, real_label = dataiter.next()
-        #  if INV_PARAM == 'p1':
-        #     real_p1 = p1_fn(real_data)
-        #  elif INV_PARAM == 'p2':
-        #     real_p1 = p2_fn(real_data.to(device))
-        real_p1 = real_label.unsqueeze(1)        # This is the label for the dataset. Currently either 20 or 100.
+            real_data = dataiter.next()
+        if INV_PARAM == 'p1':
+            real_p1 = p1_fn(real_data)
+        elif INV_PARAM == 'p2':
+            real_p1 = p2_fn(real_data.to(device))
+        # real_p1 = real_label.unsqueeze(1)        # This is the label for the dataset. Currently either 20 or 100.
         real_p1 = real_p1.to(device)
         # real_p1 = None
         for i in range(GENER_ITERS):
@@ -296,22 +296,22 @@ def train():
             # gen fake data and load real data
             noise = gen_rand_noise()
             # batch, batch_label = next(dataiter, None)
-            batch, batch_label = next(dataiter)
+            batch = next(dataiter)
             if batch is None:
                 dataiter = iter(dataloader)
-                batch, batch_label = dataiter.next()
+                batch = dataiter.next()
             # batch = batch[0] #batch[1] contains labels
             real_data = batch.to(device=device, dtype=torch.float)  # TODO: modify load_data for each loading
             # real_data = batch.to(device)
             # real_p1.to(device)
             with torch.no_grad():
                 noisev = noise  # totally freeze G, training D
-                # if INV_PARAM == 'p1':
-                #    real_p1 = p1_fn(real_data)
-                # else:
-                #    real_p1 = p2_fn(real_data)
+                if INV_PARAM == 'p1':
+                   real_p1 = p1_fn(real_data)
+                else:
+                   real_p1 = p2_fn(real_data)
                 # real_p1_v = real_p1
-                real_p1 = batch_label.unsqueeze(1)  # This is the label for the dataset. Currently either 20 or 100.
+                # real_p1 = batch_label.unsqueeze(1)  # This is the label for the dataset. Currently either 20 or 100.
                 real_p1 = real_p1.to(device)
             end = timer();
             print(f'---gen G elapsed time: {end-start}')

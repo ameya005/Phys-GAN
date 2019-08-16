@@ -133,7 +133,7 @@ physgan/
 runs/
 
 #Outputs
-#voronoi_output
-
+voronoi_output
+output
 #pkl
 *.pkl
