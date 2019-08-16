@@ -36,8 +36,8 @@ import torch.nn.init as init
 # lsun lmdb data set can be download via https://github.com/fyu/lsun
 # 64x64 ImageNet at http://image-net.org/small/download.php
 
-DATA_DIR = './datasets/voronoi/train_60000_lhs.h5'
-VAL_DIR = './datasets/voronoi/valid_12000_lhs.h5'
+DATA_DIR = './datasets/voronoi/train_30000_lhs.h5'
+VAL_DIR = './datasets/voronoi/valid_6000_lhs.h5'
 
 IMAGE_DATA_SET = 'voronoi'
 # change this to something else, e.g. 'imagenets' or 'raw' if your data is just a folder of raw images.
@@ -46,7 +46,7 @@ IMAGE_DATA_SET = 'voronoi'
 # If you use lmdb, you'll need to write the loader by yourself. Please check load_data function
 
 
-torch.cuda.set_device(1)        # Using 1080
+torch.cuda.set_device(0)        # Using TITANX
 
 TRAINING_CLASS = [
     'bedroom_train']  # IGNORE this if you are NOT training on lsun, or if you want to train on other classes of lsun, then change it accordingly
@@ -65,7 +65,7 @@ DIM = 64  # Model dimensionality
 CRITIC_ITERS = 5  # How many iterations to train the critic for
 GENER_ITERS = 1
 N_GPUS = 1  # Number of GPUs
-BATCH_SIZE = 32  # Batch size. Must be a multiple of N_GPUS
+BATCH_SIZE = 64  # Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000  # How many iterations to train for
 # END_ITER = 1
 LAMBDA = 10  # Gradient penalty lambda hyperparameter
@@ -82,7 +82,6 @@ def proj_loss(fake_data, label):
     if INV_PARAM == 'p1':
         pass
     elif INV_PARAM == 'p2':
-        #TODO: Needs to be fixed
         return torch.norm(grain_regularize_fn(fake_data, label))
 
 def proj_loss2(fake_data, real_data):

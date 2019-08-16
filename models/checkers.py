@@ -78,15 +78,13 @@ def grain_regularize_fn(x, label):
         p2_curve = p2_fn(x[:, i].unsqueeze(1).float())  # (Batch, 1, 64, 64) to (Batch, 44)
         normalized_p2_curve = normalized_p2(p2_curve)   # (Batch, 44)
 
-        temp1 = p2_curve[:, 0]
-        temp2 = label
         # r_star = torch.sqrt(p2_curve[0, :] * (DIM*DIM/PI/n[i]))
         r_star = torch.sqrt(p2_curve[:, 0] * (DIM*DIM/PI/(label/20).squeeze(1)))       #
 
         exp = torch.exp(-torch.arange(44).repeat(1, BATCH_SIZE).view(BATCH_SIZE, -1).float().cuda()/r_star.unsqueeze(1))
 
         difference = exp - normalized_p2_curve
-        objective_tensor += difference
+        objective_tensor += torch.abs(difference)
 
     return objective_tensor
 
