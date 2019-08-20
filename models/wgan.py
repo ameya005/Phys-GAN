@@ -182,8 +182,10 @@ class GoodGenerator(nn.Module):
         self.conv1 = MyConvo2d(1*self.dim, 1, 3)
         self.relu = nn.ReLU()
         self.tanh = nn.Tanh()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, input, lv):
+        #print('lv', lv.size())
         input = torch.cat([input, lv], dim=1)
         output = self.ln1(input.contiguous())
         output = output.view(-1, 8*self.dim, 4, 4)
@@ -195,26 +197,35 @@ class GoodGenerator(nn.Module):
         output = self.bn(output)
         output = self.relu(output)
         output = self.conv1(output)
-        output = self.tanh(output)
+        output = self.sigmoid(output)
         output = output.view(-1, OUTPUT_DIM)
         return output
 
 class GoodDiscriminator(nn.Module):
-    def __init__(self, dim=DIM):
+    def __init__(self, dim=DIM, ctrl_dim=0):
         super(GoodDiscriminator, self).__init__()
-
         self.dim = dim
-
-        self.conv1 = MyConvo2d(1, self.dim, 3, he_init = False)
+        if ctrl_dim == 0:
+            self.conv1 = MyConvo2d(1, self.dim, 3, he_init = False)
+        else:
+            self.conv1 = MyConvo2d(ctrl_dim+1, self.dim, 3, he_init=False)
         self.rb1 = ResidualBlock(self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
         self.rb2 = ResidualBlock(2*self.dim, 4*self.dim, 3, resample = 'down', hw=int(DIM/2))
         self.rb3 = ResidualBlock(4*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/4))
         self.rb4 = ResidualBlock(8*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/8))
         self.ln1 = nn.Linear(4*4*8*self.dim, 1)
 
-    def forward(self, input):
+    def forward(self, input, lv=None):
+        input = input.view(-1, 1, DIM, DIM)
+        if lv is not None:
+            bs, ch, sx, sy = input.size()
+            lv = lv.expand(bs, 1, sx, sy)
+            #print(lv.size(), input.size())
+            input = torch.cat([input, lv], dim=1)
+            #print(input.size())
+        #print('input',input.size())
         output = input.contiguous()
-        output = output.view(-1, 1, DIM, DIM)
+        #output = output.view(-1, 1, DIM, DIM)
         output = self.conv1(output)
         output = self.rb1(output)
         output = self.rb2(output)

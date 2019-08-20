@@ -47,9 +47,9 @@ VAL_CLASS = ['bedroom_val'] # IGNORE this if you are NOT training on lsun, or if
 if len(DATA_DIR) == 0:
     raise Exception('Please specify path to data directory in gan_64x64.py!')
 
-RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_joint_p1/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 64 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -96,7 +96,7 @@ def load_data(path_to_folder, classes):
         dataset = MatSciDataset(path_to_folder)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder,transform=data_transform)
-    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, pin_memory=True, drop_last=True)
     return dataset_loader
 
 def training_data_loader():
@@ -120,7 +120,7 @@ def calc_gradient_penalty(netD, real_data, fake_data):
     interpolates = interpolates.to(device)
     interpolates.requires_grad_(True)
 
-    disc_interpolates = netD(interpolates)
+    disc_interpolates = netD(interpolates, p1_fn(interpolates))
 
     gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
                               grad_outputs=torch.ones(disc_interpolates.size()).to(device),
@@ -162,7 +162,7 @@ if RESTORE_MODE:
     aD = torch.load(OUTPUT_PATH + "discriminator.pt")
 else:
     aG = GoodGenerator(64,64*64*1, ctrl_dim=1)
-    aD = GoodDiscriminator(64)
+    aD = GoodDiscriminator(64, ctrl_dim=1)
     
     aG.apply(weights_init)
     aD.apply(weights_init)
@@ -204,7 +204,7 @@ def train():
             noise = gen_rand_noise()
             noise.requires_grad_(True)
             fake_data = aG(noise, real_p1)
-            gen_cost = aD(fake_data)
+            gen_cost = aD(fake_data, p1_fn(fake_data.view(-1, 1, DIM, DIM)))
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
             gen_cost = -gen_cost
@@ -256,11 +256,11 @@ def train():
             start = timer()
 
             # train with real data
-            disc_real = aD(real_data)
+            disc_real = aD(real_data, real_p1)
             disc_real = disc_real.mean()
 
             # train with fake data
-            disc_fake = aD(fake_data)
+            disc_fake = aD(fake_data, p1_fn(fake_data.view(-1, 1, DIM, DIM)))
             disc_fake = disc_fake.mean()
             #print('fake', fake_data.size())
             #showMemoryUsage(0)
@@ -289,13 +289,13 @@ def train():
                 #    paramsD = aD.named_parameters()
                 #    for name, pD in paramsD:
                 #        writer.add_histogram("D." + name, pD.clone().data.cpu().numpy(), iteration)
-                if iteration %10==0:
-                    body_model = [i for i in aD.children()][0]
-                    layer1 = body_model.conv
-                    xyz = layer1.weight.data.clone()
-                    tensor = xyz.cpu()
-                    tensors = torchvision.utils.make_grid(tensor, nrow=8,padding=1)
-                    writer.add_image('D/conv1', tensors, iteration)
+                # if iteration %10==0:
+                #     body_model = [i for i in aD.children()][0]
+                #     layer1 = body_model.conv
+                #     xyz = layer1.weight.data.clone()
+                #     tensor = xyz.cpu()
+                #     tensors = torchvision.utils.make_grid(tensor, nrow=8,padding=1)
+                #     writer.add_image('D/conv1', tensors, iteration)
 
             end = timer(); print(f'---train D elapsed time: {end-start}')
         #---------------VISUALIZATION---------------------
@@ -318,7 +318,7 @@ def train():
                 with torch.no_grad():
                     imgs_v = imgs
 
-                D = aD(imgs_v)
+                D = aD(imgs_v, p1_fn(imgs_v.view(-1, 1, DIM, DIM)))
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))
