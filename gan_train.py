@@ -49,7 +49,7 @@ if len(DATA_DIR) == 0:
 
 RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_p1_new/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 64 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -96,7 +96,7 @@ def load_data(path_to_folder, classes):
         dataset = MatSciDataset(path_to_folder)
     else:
         dataset = datasets.ImageFolder(root=path_to_folder,transform=data_transform)
-    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+    dataset_loader = torch.utils.data.DataLoader(dataset,batch_size=BATCH_SIZE, shuffle=True, pin_memory=True, drop_last=True)
     return dataset_loader
 
 def training_data_loader():
