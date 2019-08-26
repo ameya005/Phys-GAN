@@ -181,8 +181,8 @@ class GoodGenerator(nn.Module):
 
         self.conv1 = MyConvo2d(1*self.dim, 1, 3)
         self.relu = nn.ReLU()
-        self.tanh = nn.Tanh()
-        self.sigmoid = nn.Sigmoid()
+        #self.tanh = nn.Tanh()
+        self.sig = nn.Sigmoid()
 
     def forward(self, input, lv):
         input = torch.cat([input, lv], dim=1)
@@ -196,7 +196,7 @@ class GoodGenerator(nn.Module):
         output = self.bn(output)
         output = self.relu(output)
         output = self.conv1(output)
-        output = self.sigmoid(output)
+        output = self.sig(output)
         output = output.view(-1, OUTPUT_DIM)
         return output
 
