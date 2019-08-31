@@ -47,9 +47,9 @@ VAL_CLASS = ['bedroom_val'] # IGNORE this if you are NOT training on lsun, or if
 if len(DATA_DIR) == 0:
     raise Exception('Please specify path to data directory in gan_64x64.py!')
 
-RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration 
-OUTPUT_PATH = './model_outputs_p2_2/' # output path where result (.e.g drawing images, cost, chart) will be stored
+OUTPUT_PATH = './model_outputs_p2/' # output path where result (.e.g drawing images, cost, chart) will be stored
 # MODE = 'wgan-gp'
 DIM = 64 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -331,6 +331,7 @@ def train():
         if iteration % 50 == 0:
             val_loader = val_data_loader() 
             p2_vals = []
+            p1_vals = []
             dev_disc_costs = []
             for _, images in enumerate(val_loader):
                 imgs = torch.Tensor(images[0])
@@ -338,21 +339,30 @@ def train():
                 imgs = imgs.to(device)
                 with torch.no_grad():
                     imgs_v = imgs
-                # Sample random p2's for analysis
-                rn = np.random.rand()
-                if rn > 0.1 and len(p2_vals) < 64:
-                    p2_vals.append(p2_fn(imgs.unsqueeze(0)))
+                if INV_PARAM == 'p2':
+                    # Sample random p2's for analysis
+                    rn = np.random.rand()
+                    if rn > 0.1 and len(p2_vals) < 64:
+                        p2_vals.append(p2_fn(imgs.unsqueeze(0)))
+                else:
+                    rn = np.random.rand()
+                    if rn>0.1 and len(p1_vals) < 64:
+                        p1_vals.append(p1_fn(imgs.unsqueeze(0)))
                 D = aD(imgs_v)
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))
             lib.plot.flush()
-            print(p2_vals[0].size())
-            p2_vals = torch.stack(p2_vals, dim=0).squeeze(1).to(device)
-            print(p2_vals.size())
-            if p2_vals.size()[0] != BATCH_SIZE:
-                continue
-            gen_images = generate_image(aG, fixed_noise, p2_vals)
+            #print(p2_vals[0].size())
+            if INV_PARAM == 'p2':
+                p2_vals = torch.stack(p2_vals, dim=0).squeeze(1).to(device)
+            #print(p2_vals.size())
+                if p2_vals.size()[0] != BATCH_SIZE:
+                    continue
+                gen_images = generate_image(aG, fixed_noise, p2_vals)
+            else:
+                p1_vals = torch.stack(p1_vals, dim=0).squeeze(1).to(device)
+                gen_images = generate_image(aG, fixed_noise, p1_vals)
             torchvision.utils.save_image(gen_images, OUTPUT_PATH + 'samples_{}.png'.format(iteration), nrow=8, padding=2)
             grid_images = torchvision.utils.make_grid(gen_images, nrow=8, padding=2)
             writer.add_image('images', grid_images, iteration)

@@ -29,8 +29,9 @@ def main():
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
 
-    gen_model = torch.load(args.model)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    gen_model = torch.load(args.model, map_location='cpu')
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu')
     gen_model.to(device)
     gen_model.eval()
     p1_r = []
