@@ -212,7 +212,7 @@ class GoodDiscriminator(nn.Module):
         super(GoodDiscriminator, self).__init__()
         self.dim = dim
         self.ctrl_dim = ctrl_dim
-        self.lin = nn.Linear(CATEGORY*DIM*DIM+1, CATEGORY*DIM*DIM)
+        self.lin = nn.Linear(CATEGORY*DIM*DIM+self.ctrl_dim, CATEGORY*DIM*DIM)
         self.conv1 = MyConvo2d(CATEGORY, self.dim, 3, he_init = False)
         self.rb1 = ResidualBlock(self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
         self.rb2 = ResidualBlock(2*self.dim, 4*self.dim, 3, resample = 'down', hw=int(DIM/2))
