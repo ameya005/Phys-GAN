@@ -58,13 +58,13 @@ CONDITIONAL = True
 RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration
 # OUTPUT_PATH = './output/toyExample_radius/' # output path where result (.e.g drawing images, cost, chart) will be stored
-OUTPUT_PATH = './output/toyExample_CH3_radius_position_noProj/'
+OUTPUT_PATH = './toyExample_rad_loc/'
 # MODE = 'wgan-gp'
 DIM = 128 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
 GENER_ITERS = 1
 N_GPUS = 1 # Number of GPUs
-BATCH_SIZE = 32
+BATCH_SIZE = 4
 # Batch size. Must be a multiple of N_GPUS
 END_ITER = 100000 # How many iterations to train for
 # END_ITER = 7800
@@ -157,7 +157,7 @@ def calc_gradient_penalty(netD, real_data, fake_data):
     interpolates = interpolates.to(device)
     interpolates.requires_grad_(True)
 
-    disc_interpolates = netD(interpolates)
+    disc_interpolates = netD(interpolates, p1_fn(interpolates))
 
     gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
                               grad_outputs=torch.ones(disc_interpolates.size()).to(device),
@@ -272,7 +272,7 @@ def train():
             noise = gen_rand_noise()
             noise.requires_grad_(True)
             fake_data = aG(noise, real_p1)
-            gen_cost = aD(fake_data)
+            gen_cost = aD(fake_data, p1_fn(fake_data.view(BATCH_SIZE, CATEGORY, DIM, DIM)))
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
             gen_cost = -gen_cost
@@ -337,11 +337,11 @@ def train():
             start = timer()
 
             # train with real data
-            disc_real = aD(real_data)
+            disc_real = aD(real_data, real_p1)
             disc_real = disc_real.mean()
 
             # train with fake data
-            disc_fake = aD(fake_data)
+            disc_fake = aD(fake_data, p1_fn(disc_fake.view(BATCH_SIZE, CATEGORY, DIM, DIM)))
             disc_fake = disc_fake.mean()
             #print('fake', fake_data.size())
             #showMemoryUsage(0)
@@ -409,7 +409,7 @@ def train():
                 with torch.no_grad():
                     imgs_v = imgs
 
-                D = aD(imgs_v)
+                D = aD(imgs_v, p1_fn(imgs_v))
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))

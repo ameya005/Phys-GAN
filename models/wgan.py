@@ -208,11 +208,11 @@ class GoodGenerator(nn.Module):
         return output
 
 class GoodDiscriminator(nn.Module):
-    def __init__(self, dim=DIM):
+    def __init__(self, dim=DIM, ctrl_dim=0):
         super(GoodDiscriminator, self).__init__()
-
         self.dim = dim
-
+        self.ctrl_dim = ctrl_dim
+        self.lin = nn.Linear(CATEGORY*DIM*DIM+1, CATEGORY*DIM*DIM)
         self.conv1 = MyConvo2d(CATEGORY, self.dim, 3, he_init = False)
         self.rb1 = ResidualBlock(self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
         self.rb2 = ResidualBlock(2*self.dim, 4*self.dim, 3, resample = 'down', hw=int(DIM/2))
@@ -220,9 +220,12 @@ class GoodDiscriminator(nn.Module):
         self.rb4 = ResidualBlock(8*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/8))
         self.ln1 = nn.Linear(4*4*8*self.dim, 1)
 
-    def forward(self, input):
+    def forward(self, input, lv):
+        if lv is not None:
+            input = torch.cat([input, lv], dim=1)
+        input = self.lin(input)
         output = input.contiguous()
-        output = output.view(-1, CATEGORY, DIM, DIM)
+        output = output.view(-1, CATEGORY+1, DIM, DIM)
         output = self.conv1(output)
         output = self.rb1(output)
         output = self.rb2(output)
