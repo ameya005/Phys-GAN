@@ -212,7 +212,9 @@ class GoodDiscriminator(nn.Module):
         super(GoodDiscriminator, self).__init__()
         self.dim = dim
         self.ctrl_dim = ctrl_dim
-       #elf.lin = nn.Linear(CATEGORY*DIM*DIM+self.ctrl_dim, CATEGORY*DIM*DIM)
+        self.lin = nn.Linear(self.dim, 128)
+        self.lin2 = nn.Linear(self.ctrl_dim, 128)
+        self.lin3 = nn.Linear(256, CATEGORY*DIM*DIM)
         self.conv1 = MyConvo2d(CATEGORY, self.dim, 3, he_init = False)
         self.rb1 = ResidualBlock(self.dim, 2*self.dim, 3, resample = 'down', hw=DIM)
         self.rb2 = ResidualBlock(2*self.dim, 4*self.dim, 3, resample = 'down', hw=int(DIM/2))
@@ -222,12 +224,15 @@ class GoodDiscriminator(nn.Module):
         self.ln2 = nn.Linear(4*4*8*self.dim, self.ctrl_dim)
 
     def forward(self, input, lv):
-        if lv is not None:
-            lv = lv.expand((-1, lv.size()[1], input.size()[2], input.size()[3]))
-            input = torch.cat([input, lv], dim=1)
+        #if lv is not None:
+        #    lv = lv.expand((-1, lv.size()[1], input.size()[2], input.size()[3]))
+        #    input = torch.cat([input, lv], dim=1)
         #input = self.lin(input)
+        in1 = self.lin(input)
+        in2 = self.lin2(lv)
+        input = self.lin3(torch.cat([in1, in2], dim=1))
         output = input.contiguous()
-        output = output.view(-1, CATEGORY+self.ctrl_dim, DIM, DIM)
+        output = output.view(-1, CATEGORY, DIM, DIM)
         output = self.conv1(output)
         output = self.rb1(output)
         output = self.rb2(output)
