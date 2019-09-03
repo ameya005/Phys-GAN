@@ -58,7 +58,7 @@ CONDITIONAL = True
 RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration
 # OUTPUT_PATH = './output/toyExample_radius/' # output path where result (.e.g drawing images, cost, chart) will be stored
-OUTPUT_PATH = './toyExample_rad_loc/'
+OUTPUT_PATH = './toyExample_rad_loc_acgan/'
 # MODE = 'wgan-gp'
 DIM = 128 # Model dimensionality
 CRITIC_ITERS = 5 # How many iterations to train the critic for
@@ -216,7 +216,7 @@ else:
         else:
             # aG = GoodGenerator(64,64*64*1, ctrl_dim=3*NUM_CIRCLE)              # Three dimension for freeCircle
             aG = GoodGenerator(64, DIM*DIM*CATEGORY, ctrl_dim=NUM_CIRCLE+4)      # +4 for the centroid.
-            aD = GoodDiscriminator(64)
+            aD = GoodDiscriminator(64, ctrl_dim=NUM_CIRCLE+4)
     else:
         aG = GoodGenerator(64, DIM*DIM*CATEGORY, ctrl_dim=0)
         aD = GoodDiscriminator(64)
@@ -272,7 +272,12 @@ def train():
             noise = gen_rand_noise()
             noise.requires_grad_(True)
             fake_data = aG(noise, real_p1)
-            gen_cost = aD(fake_data, p1_fn(fake_data.view(BATCH_SIZE, CATEGORY, DIM, DIM)))
+            x_fake, y_fake = centroid_fn(fake_data.to(device))
+            x_fake, y_fake = x_fake*C, y_fake*C
+            fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_data.view(-1, CATEGORY, DIM, DIM).to(device))), dim=1)
+            # real_p1 = p1_fn(real_data)
+            fake_p1 = fake_p1.to(device)
+            gen_cost = aD(fake_data, fake_p1)
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
             gen_cost = -gen_cost
@@ -280,7 +285,7 @@ def train():
         optimizer_g.step()
         end = timer()
         print(f'---train G elapsed time: {end - start}')
-        print(fake_data.min(), real_data.min())
+        #print(fake_data.min(), real_data.min())
         # if CONDITIONAL:
         #     #Projection steps
         #     pj_cost = None
@@ -341,7 +346,13 @@ def train():
             disc_real = disc_real.mean()
 
             # train with fake data
-            disc_fake = aD(fake_data, p1_fn(disc_fake.view(BATCH_SIZE, CATEGORY, DIM, DIM)))
+            
+            x_fake, y_fake = centroid_fn(fake_data)
+            x_fake, y_fake = x_fake*C, y_fake*C
+            fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_data.view(-1, CATEGORY, DIM, DIM))), dim=1)      # For toy example.
+            # real_p1 = p1_fn(real_data)
+            fake_p1 = fake_p1.to(device)
+            disc_fake = aD(fake_data, fake_p1)
             disc_fake = disc_fake.mean()
             #print('fake', fake_data.size())
             #showMemoryUsage(0)
@@ -408,8 +419,14 @@ def train():
                 imgs = imgs.to(device)
                 with torch.no_grad():
                     imgs_v = imgs
-
-                D = aD(imgs_v, p1_fn(imgs_v))
+                # real_p1 = p1_fn(real_data)
+                x_real, y_real = centroid_fn(imgs_v)
+                x_real, y_real = x_real*C, y_real*C
+                real_p1 = torch.cat((x_real, y_real, p1_fn(imgs_v)), dim=1)      # For toy example.
+                #real_p1 = p1_fn(real_data)
+                real_p1 = real_p1.to(device)
+                #fake_p1 = fake_p1.to(device)
+                D = aD(imgs_v, real_p1)
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))

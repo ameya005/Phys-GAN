@@ -219,6 +219,7 @@ class GoodDiscriminator(nn.Module):
         self.rb3 = ResidualBlock(4*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/4))
         self.rb4 = ResidualBlock(8*self.dim, 8*self.dim, 3, resample = 'down', hw=int(DIM/8))
         self.ln1 = nn.Linear(4*4*8*self.dim, 1)
+        self.ln2 = nn.Linear(4*4*8*self.dim, self.ctrl_dim)
 
     def forward(self, input, lv):
         if lv is not None:
@@ -232,6 +233,8 @@ class GoodDiscriminator(nn.Module):
         output = self.rb3(output)
         output = self.rb4(output)
         output = output.view(-1, 4*4*8*self.dim)
-        output = self.ln1(output)
-        output = output.view(-1)
-        return output
+        output1 = self.ln1(output)
+        output2 = self.ln2(output)
+        output1 = output1.view(-1)
+        output2 = output2.view(-1)
+        return output1, output2
