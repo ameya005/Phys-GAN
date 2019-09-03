@@ -212,7 +212,7 @@ class GoodDiscriminator(nn.Module):
         super(GoodDiscriminator, self).__init__()
         self.dim = dim
         self.ctrl_dim = ctrl_dim
-        self.lin = nn.Linear(self.dim, 128)
+        self.lin = nn.Linear(CATEGORY*DIM*DIM, 128)
         self.lin2 = nn.Linear(self.ctrl_dim, 128)
         self.lin3 = nn.Linear(256, CATEGORY*DIM*DIM)
         self.conv1 = MyConvo2d(CATEGORY, self.dim, 3, he_init = False)
