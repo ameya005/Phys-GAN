@@ -78,11 +78,11 @@ C = 1/DIM           # Normalizing Factor for the centroid
 #     item = gpu_stats.jsonify()["gpus"][device]
 #     print('Used/total: ' + "{}/{}".format(item["memory.used"], item["memory.total"]))
 
-# def proj_loss(fake_data, real_data):
+#def proj_loss(fake_data, real_data):
 #     """
 #     Fake data requires to be pushed from tanh range to [0, 1]
 #     """
-#     #TODO: Needs to be fixed.
+#    #TODO: Needs to be fixed.
 #     return torch.abs(p1_fn(fake_data) - p1_fn(real_data))
 
 centroid_fn = CentroidFunction(BATCH_SIZE, NUM_CIRCLE, DIM, DIM)  # BATCH SIZE, CH, WIDTH, HEIGHT
@@ -156,8 +156,13 @@ def calc_gradient_penalty(netD, real_data, fake_data):
 
     interpolates = interpolates.to(device)
     interpolates.requires_grad_(True)
-
-    disc_interpolates = netD(interpolates, p1_fn(interpolates))
+    
+    x_int, y_int = centroid_fn(interpolates)
+    x_real, y_real = x_int*C, y_int*C
+    int_p1 = torch.cat((x_int, y_int, p1_fn(int_data.to(device))), dim=1)
+    # real_p1 = p1_fn(real_data)
+    int_p1 = int_p1.to(device)
+    disc_interpolates = netD(interpolates, int_p1)
 
     gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
                               grad_outputs=torch.ones(disc_interpolates.size()).to(device),
@@ -226,8 +231,8 @@ aD.apply(weights_init)
 LR = 1e-4
 optimizer_g = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0,0.9))
 optimizer_d = torch.optim.Adam(aD.parameters(), lr=LR, betas=(0,0.9))
-# if CONDITIONAL:
-#     optimizer_pj = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0, 0.9))
+if CONDITIONAL:
+     optimizer_pj = torch.optim.Adam(aG.parameters(), lr=LR, betas=(0, 0.9))
 one = torch.FloatTensor([1])
 mone = one * -1
 aG = aG.to(device)
@@ -272,11 +277,12 @@ def train():
             noise = gen_rand_noise()
             noise.requires_grad_(True)
             fake_data = aG(noise, real_p1)
-            x_fake, y_fake = centroid_fn(fake_data.to(device))
-            x_fake, y_fake = x_fake*C, y_fake*C
-            fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_data.view(-1, CATEGORY, DIM, DIM).to(device))), dim=1)
+            with torch.no_grad():
+                x_fake, y_fake = centroid_fn(fake_data.to(device))
+                x_fake, y_fake = x_fake*C, y_fake*C
+                fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_data.view(-1, CATEGORY, DIM, DIM).to(device))), dim=1)
             # real_p1 = p1_fn(real_data)
-            fake_p1 = fake_p1.to(device)
+                fake_p1 = fake_p1.to(device)
             gen_cost = aD(fake_data, fake_p1)
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
@@ -286,19 +292,19 @@ def train():
         end = timer()
         print(f'---train G elapsed time: {end - start}')
         #print(fake_data.min(), real_data.min())
-        # if CONDITIONAL:
-        #     #Projection steps
-        #     pj_cost = None
-        #     for i in range(PJ_ITERS):
-        #         print('Projection iters: {}'.format(i))
-        #         aG.zero_grad()
-        #         noise = gen_rand_noise()
-        #         noise.requires_grad=True
-        #         fake_data = aG(noise, real_p1)
-        #         pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_data.to(device))
-        #         pj_cost = pj_cost.mean()
-        #         pj_cost.backward()
-        #         optimizer_pj.step()
+        if CONDITIONAL:
+             #Projection steps
+             pj_cost = None
+             for i in range(PJ_ITERS):
+                 print('Projection iters: {}'.format(i))
+                 aG.zero_grad()
+                 noise = gen_rand_noise()
+                 noise.requires_grad=True
+                 fake_data = aG(noise, real_p1)
+                 pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_data.to(device))
+                 pj_cost = pj_cost.mean()
+                 pj_cost.backward()
+                 optimizer_pj.step()
 
 
         #---------------------TRAIN D------------------------
