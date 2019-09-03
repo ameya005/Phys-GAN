@@ -278,9 +278,10 @@ def train():
             noise.requires_grad_(True)
             fake_data = aG(noise, real_p1)
             with torch.no_grad():
-                x_fake, y_fake = centroid_fn(fake_data.to(device))
+                fake_img = fake_data.view(-1, CATEGORY, DIM, DIM)
+                x_fake, y_fake = centroid_fn(fake_img.to(device))
                 x_fake, y_fake = x_fake*C, y_fake*C
-                fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_data.view(-1, CATEGORY, DIM, DIM).to(device))), dim=1)
+                fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_img).to(device)), dim=1)
             # real_p1 = p1_fn(real_data)
                 fake_p1 = fake_p1.to(device)
             gen_cost = aD(fake_data, fake_p1)
