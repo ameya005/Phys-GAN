@@ -284,7 +284,7 @@ def train():
                 fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_img).to(device)), dim=1)
             # real_p1 = p1_fn(real_data)
                 fake_p1 = fake_p1.to(device)
-            gen_cost = aD(fake_data, fake_p1)
+            gen_cost, gen_p1 = aD(fake_data, fake_p1)
             gen_cost = gen_cost.mean()
             gen_cost.backward(mone)
             gen_cost = -gen_cost
@@ -293,19 +293,19 @@ def train():
         end = timer()
         print(f'---train G elapsed time: {end - start}')
         #print(fake_data.min(), real_data.min())
-        if CONDITIONAL:
-             #Projection steps
-             pj_cost = None
-             for i in range(PJ_ITERS):
-                 print('Projection iters: {}'.format(i))
-                 aG.zero_grad()
-                 noise = gen_rand_noise()
-                 noise.requires_grad=True
-                 fake_data = aG(noise, real_p1)
-                 pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_data.to(device))
-                 pj_cost = pj_cost.mean()
-                 pj_cost.backward()
-                 optimizer_pj.step()
+       # if CONDITIONAL:
+       #      #Projection steps
+       #      pj_cost = None
+       #      for i in range(PJ_ITERS):
+       #          print('Projection iters: {}'.format(i))
+       #          aG.zero_grad()
+       #          noise = gen_rand_noise()
+       #          noise.requires_grad=True
+       #          fake_data = aG(noise, real_p1)
+        #         pj_cost = proj_loss(fake_data.view(-1, CATEGORY, DIM, DIM), real_data.to(device))
+        #         pj_cost = pj_cost.mean()
+        #         pj_cost.backward()
+        #         optimizer_pj.step()
 
 
         #---------------------TRAIN D------------------------
@@ -349,26 +349,17 @@ def train():
             start = timer()
 
             # train with real data
-            disc_real = aD(real_data, real_p1)
+            disc_real, disc_vals = aD(real_data, real_p1)
             disc_real = disc_real.mean()
 
-            # train with fake data
-            
-            x_fake, y_fake = centroid_fn(fake_data)
-            x_fake, y_fake = x_fake*C, y_fake*C
-            fake_p1 = torch.cat((x_fake, y_fake, p1_fn(fake_data.view(-1, CATEGORY, DIM, DIM))), dim=1)      # For toy example.
-            # real_p1 = p1_fn(real_data)
-            fake_p1 = fake_p1.to(device)
-            disc_fake = aD(fake_data, fake_p1)
-            disc_fake = disc_fake.mean()
             #print('fake', fake_data.size())
             #showMemoryUsage(0)
             # train with interpolates data
             gradient_penalty = calc_gradient_penalty(aD, real_data, fake_data)
             #showMemoryUsage(0)
-
+            pj_cost = torch.norm(disc_vals - real_p1).mean()
             # final disc cost
-            disc_cost = disc_fake - disc_real + gradient_penalty
+            disc_cost = disc_fake - disc_real + gradient_penalty +pj_cost
             disc_cost.backward()
             w_dist = disc_fake  - disc_real
             
