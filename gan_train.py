@@ -159,10 +159,10 @@ def calc_gradient_penalty(netD, real_data, fake_data):
     
     x_int, y_int = centroid_fn(interpolates)
     x_real, y_real = x_int*C, y_int*C
-    int_p1 = torch.cat((x_int, y_int, p1_fn(int_data.to(device))), dim=1)
+    int_p1 = torch.cat((x_int, y_int, p1_fn(interpolates)), dim=1)
     # real_p1 = p1_fn(real_data)
     int_p1 = int_p1.to(device)
-    disc_interpolates = netD(interpolates, int_p1)
+    disc_interpolates, disc_vals = netD(interpolates, int_p1)
 
     gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
                               grad_outputs=torch.ones(disc_interpolates.size()).to(device),
@@ -292,7 +292,7 @@ def train():
         optimizer_g.step()
         end = timer()
         print(f'---train G elapsed time: {end - start}')
-        #print(fake_data.min(), real_data.min())
+        print(fake_data.max(), real_data.max())
        # if CONDITIONAL:
        #      #Projection steps
        #      pj_cost = None
@@ -325,6 +325,7 @@ def train():
                 batch = dataiter.next()
             #batch = batch[0] #batch[1] contains labels
             real_data = batch.to(device) #TODO: modify load_data for each loading
+            #print(real_data.size())
             #real_p1.to(device)
             with torch.no_grad():
                 noisev = noise  # totally freeze G, training D
@@ -349,20 +350,26 @@ def train():
             start = timer()
 
             # train with real data
+
             disc_real, disc_vals = aD(real_data, real_p1)
             disc_real = disc_real.mean()
 
+            disc_fake, disc_fake_vals = aD(fake_data, real_p1)
+            disc_fake = disc_fake.mean()
+            #print(real_data.size(), real_p1.size(), disc_vals.size(), disc_real)
             #print('fake', fake_data.size())
             #showMemoryUsage(0)
             # train with interpolates data
             gradient_penalty = calc_gradient_penalty(aD, real_data, fake_data)
             #showMemoryUsage(0)
+            #print(disc_vals.size(), real_p1.size())
             pj_cost = torch.norm(disc_vals - real_p1).mean()
+            #print(disc_fake.size(), disc_real.size(), pj_cost.size(), gradient_penalty.size())
             # final disc cost
             disc_cost = disc_fake - disc_real + gradient_penalty +pj_cost
             disc_cost.backward()
             w_dist = disc_fake  - disc_real
-            
+            print('dcost,pj cost,',disc_cost, pj_cost, gradient_penalty)
             optimizer_d.step()
             #------------------VISUALIZATION----------
             if i == CRITIC_ITERS-1:
@@ -370,8 +377,8 @@ def train():
                 writer.add_scalar('data/disc_fake', disc_fake, iteration)
                 writer.add_scalar('data/disc_real', disc_real, iteration)
                 writer.add_scalar('data/gradient_pen', gradient_penalty, iteration)
-                # if CONDITIONAL:
-                #     writer.add_scalar('data/p1_cost', pj_cost.cpu().detach(), iteration)
+                if CONDITIONAL:
+                    writer.add_scalar('data/p1_cost', pj_cost.cpu().detach(), iteration)
                 #writer.add_scalar('data/d_conv_weight_mean', [i for i in aD.children()][0].conv.weight.data.clone().mean(), iteration)
                 #writer.add_scalar('data/d_linear_weight_mean', [i for i in aD.children()][-1].weight.data.clone().mean(), iteration)
                 #writer.add_scalar('data/fake_data_mean', fake_data.mean())
@@ -413,18 +420,19 @@ def train():
             val_loader = val_data_loader() 
             dev_disc_costs = []
             for _, images in enumerate(val_loader):
-                imgs = torch.Tensor(images[0])
+                imgs = torch.Tensor(images[:4])
                 imgs = imgs.to(device)
                 with torch.no_grad():
                     imgs_v = imgs
+                
                 # real_p1 = p1_fn(real_data)
-                x_real, y_real = centroid_fn(imgs_v)
-                x_real, y_real = x_real*C, y_real*C
-                real_p1 = torch.cat((x_real, y_real, p1_fn(imgs_v)), dim=1)      # For toy example.
+                #x_real, y_real = centroid_fn(imgs_v.unsqueeze(0))
+                #x_real, y_real = x_real*C, y_real*C
+                #real_p1 = torch.cat((x_real, y_real, p1_fn(imgs_v.unsqueeze(0))), dim=1)      # For toy example.
                 #real_p1 = p1_fn(real_data)
-                real_p1 = real_p1.to(device)
+               #real_p1 = real_p1.to(device)
                 #fake_p1 = fake_p1.to(device)
-                D = aD(imgs_v, real_p1)
+                D, Dval = aD(imgs_v, real_p1)
                 _dev_disc_cost = -D.mean().cpu().data.numpy()
                 dev_disc_costs.append(_dev_disc_cost)
             lib.plot.plot(OUTPUT_PATH + 'dev_disc_cost.png', np.mean(dev_disc_costs))
