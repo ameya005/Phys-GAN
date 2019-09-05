@@ -55,7 +55,7 @@ CATEGORY = NUM_CIRCLE + 1
 CONDITIONAL = True
 
 
-RESTORE_MODE = False # if True, it will load saved model from OUT_PATH and continue to train
+RESTORE_MODE = True # if True, it will load saved model from OUT_PATH and continue to train
 START_ITER = 0 # starting iteration
 # OUTPUT_PATH = './output/toyExample_radius/' # output path where result (.e.g drawing images, cost, chart) will be stored
 OUTPUT_PATH = './toyExample_rad_loc_acgan/'
@@ -285,7 +285,7 @@ def train():
             # real_p1 = p1_fn(real_data)
                 fake_p1 = fake_p1.to(device)
             gen_cost, gen_p1 = aD(fake_data, fake_p1)
-            gen_cost = gen_cost.mean()
+            gen_cost = gen_cost.mean() + torch.norm(fake_p1 - gen_p1).mean()
             gen_cost.backward(mone)
             gen_cost = -gen_cost
         
